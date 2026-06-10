@@ -1,6 +1,7 @@
 package com.xayah.core.service.medium.restore
 
 import android.annotation.SuppressLint
+import com.xayah.core.data.repository.BackupEngineRepository
 import com.xayah.core.datastore.readResetRestoreList
 import com.xayah.core.datastore.saveLastRestoreTime
 import com.xayah.core.model.DataType
@@ -8,11 +9,14 @@ import com.xayah.core.model.OpType
 import com.xayah.core.model.OperationState
 import com.xayah.core.model.ProcessingInfoType
 import com.xayah.core.model.ProcessingType
+import com.xayah.core.model.RESTORE_SOURCE_ARG
+import com.xayah.core.model.RestoreSource
 import com.xayah.core.model.TaskType
 import com.xayah.core.model.database.Info
 import com.xayah.core.model.database.MediaEntity
 import com.xayah.core.model.database.ProcessingInfoEntity
 import com.xayah.core.model.database.TaskDetailMediaEntity
+import com.xayah.core.model.util.of
 import com.xayah.core.service.R
 import com.xayah.core.service.medium.AbstractMediumService
 import com.xayah.core.service.util.MediumRestoreUtil
@@ -72,6 +76,12 @@ internal abstract class AbstractRestoreService : AbstractMediumService() {
     protected open suspend fun clear() {}
 
     protected abstract val mMediumRestoreUtil: MediumRestoreUtil
+    protected abstract val mBackupEngineRepo: BackupEngineRepository
+
+    protected val mRestoreSource: RestoreSource
+        get() = RestoreSource.of(mBoundIntent?.getStringExtra(RESTORE_SOURCE_ARG))
+    protected val mRepositorySource: Boolean
+        get() = mRestoreSource == RestoreSource.REPOSITORY
 
     override suspend fun onPreprocessing(entity: ProcessingInfoEntity) {
         when (entity.infoType) {
@@ -102,7 +112,17 @@ internal abstract class AbstractRestoreService : AbstractMediumService() {
                 media.update(state = OperationState.PROCESSING)
                 val m = media.mediaEntity
                 val srcDir = "${mFilesDir}/${m.archivesRelativeDir}"
-                restore(m = m, t = media, srcDir = srcDir)
+                if (mRepositorySource) {
+                    val snapshotId = m.repositorySnapshotId.ifBlank { BackupEngineRepository.LEGACY_LATEST_SNAPSHOT_ID }
+                    val result = mBackupEngineRepo.restoreMedia(m, m.path, snapshotId)
+                    if (result.isSuccess) {
+                        media.update(progress = 1f, state = OperationState.DONE)
+                    } else {
+                        media.update(progress = 1f, state = OperationState.ERROR, log = result.toString())
+                    }
+                } else {
+                    restore(m = m, t = media, srcDir = srcDir)
+                }
 
                 if (media.isSuccess) {
                     media.update(mediaEntity = m)

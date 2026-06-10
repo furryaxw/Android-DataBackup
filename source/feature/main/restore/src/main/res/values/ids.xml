@@ -26,6 +26,7 @@
     <item name="finished" type="string" />
     <item name="files" type="string" />
     <item name="args_files_backed_up" type="string" />
+    <item name="refresh" type="string" />
 
     <item name="ic_rounded_package_2" type="drawable" />
     <item name="ic_rounded_apps" type="drawable" />

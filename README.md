@@ -1,90 +1,43 @@
-<div align="center">
+# DataBackup
 
-<span style="font-weight: bold"> <a> English </a> </span>
+[![Fork](https://img.shields.io/badge/fork-furryaxw%2FAndroid--DataBackup-6f42c1)](https://github.com/furryaxw/Android-DataBackup)
+[![Release](https://img.shields.io/github/v/release/furryaxw/Android-DataBackup?color=orange)](https://github.com/furryaxw/Android-DataBackup/releases)
+[![License](https://img.shields.io/github/license/furryaxw/Android-DataBackup?color=2ea44f)](./LICENSE)
+[![Android](https://img.shields.io/badge/android-7.0%2B-3DDC84?logo=android&logoColor=white)](https://github.com/furryaxw/Android-DataBackup/releases)
+[![Root](https://img.shields.io/badge/root-required-c0392b)](https://github.com/furryaxw/Android-DataBackup/releases)
 
-<img src="./fastlane/metadata/android/en-US/images/icon.png" alt="logo" width="128px" />
+面向 Root 设备的 Android 数据备份与恢复工具。
 
-<h1 align="center">DataBackup</h1>
+## 概览
 
-[![Doc](https://img.shields.io/badge/wiki-documentation-forestgreen)](https://DataBackupOfficial.github.io)
-[![Download](https://img.shields.io/github/downloads/XayahSuSuSu/Android-DataBackup/total)](https://github.com/XayahSuSuSu/Android-DataBackup/releases)
-[![GitHub release](https://img.shields.io/github/v/release/XayahSuSuSu/Android-DataBackup?color=orange)](https://github.com/XayahSuSuSu/Android-DataBackup/releases)
-[![License](https://img.shields.io/github/license/XayahSuSuSu/Android-DataBackup?color=ff69b4)](./LICENSE)
-[![Channel](https://img.shields.io/badge/channel-DataBackup-252850?color=blue&logo=telegram)](https://t.me/dabackupchannel)
-[![Chat](https://img.shields.io/badge/group-DataBackup-252850?color=blue&logo=telegram)](https://t.me/databackupchat)
-[![Translation](https://hosted.weblate.org/widget/databackup/svg-badge.svg)](https://hosted.weblate.org/engage/databackup/)
+本仓库是 [XayahSuSuSu/Android-DataBackup](https://github.com/XayahSuSuSu/Android-DataBackup) 的 fork。
 
-Free and open-source data backup application
+当前 fork 由 [furryaxw](https://github.com/furryaxw) 维护，主要继续推进仓库化备份、恢复目录索引、云端同步和相关稳定性修复。
 
-</div>
+上游项目历史和原始贡献归属于原项目及其贡献者。
 
-## Overview
-<a href="https://hellogithub.com/repository/3e9dc382d4764688856238a83616de5b" target="_blank"><img src="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=3e9dc382d4764688856238a83616de5b&claim_uid=POXv2xVC71JHihc&theme=neutral" alt="Featured｜HelloGitHub" style="width: 250px; height: 54px;" width="250" height="54" /></a>
+## 功能
 
-:star: Based on [speed-backup](https://github.com/YAWAsau/backup_script) by [CoolApk@落叶凄凉TEL](http://www.coolapk.com/u/2277637).
+- 需要 Root 权限，支持应用和共享存储文件的备份与恢复。
+- 使用仓库化备份结构，恢复页面根据当前仓库目录重建可恢复数据。
+- 支持本地仓库和云端仓库同步。
+- 支持 FTP、SFTP、SMB、WebDAV 等云端存储。
+- 支持多用户应用备份。
+- 支持按 APK、user、user_de、data、OBB、media 等数据类型进行应用数据处理。
+- 支持备份完成后生成和刷新本地仓库元数据。
 
-:fire: The [script](https://github.com/YAWAsau/backup_script) has been **acclaimed** since the [author](https://github.com/YAWAsau) wrote it.
+## 下载
 
-:sparkling_heart: This application was born **with the consent of the author**.
+请从 GitHub Releases 下载 APK：
 
-## Usage
-See [documentation](https://DataBackupOfficial.github.io).
+- [最新版本](https://github.com/furryaxw/Android-DataBackup/releases/latest)
+- [全部版本](https://github.com/furryaxw/Android-DataBackup/releases)
 
-## Features
-* :deciduous_tree: **Root needed, support [Magisk](https://github.com/topjohnwu/Magisk), [KernelSU](https://github.com/tiann/KernelSU), [APatch](https://github.com/bmax121/APatch)**
+## 维护者
 
-* :cyclone: **Multi-user Support**
+- Fork 维护者：[furryaxw](https://github.com/furryaxw)
+- 上游项目：[XayahSuSuSu/Android-DataBackup](https://github.com/XayahSuSuSu/Android-DataBackup)
 
-* :cloud: **Cloud**
+## 许可证
 
-* :sunglasses: **100% Data Integrity**
-
-* :zap: **Fast**
-
-* :sunny: **Easy**
-
-* :rose: **...**
-
-## Screenshot
-<div align="center">
-	<img src="./fastlane/metadata/android/en-US/images/phoneScreenshots/01.jpg" width="275px"><img src="./fastlane/metadata/android/en-US/images/phoneScreenshots/02.jpg" width="275px"><img src="./fastlane/metadata/android/en-US/images/phoneScreenshots/03.jpg" width="275px">
-	<img src="./fastlane/metadata/android/en-US/images/phoneScreenshots/04.jpg" width="275px"><img src="./fastlane/metadata/android/en-US/images/phoneScreenshots/05.jpg" width="275px"><img src="./fastlane/metadata/android/en-US/images/phoneScreenshots/06.jpg" width="275px">
-</div>
-
-## Download
-[<img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png"
-     alt="Get it on IzzyOnDroid"
-     height="80">](https://apt.izzysoft.de/fdroid/index/apk/com.xayah.databackup.foss)[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
-    alt="Get it on F-Droid"
-    height="80">](https://f-droid.org/zh_Hans/packages/com.xayah.databackup.foss/)
-
-or get the APK from the [Releases](https://github.com/XayahSuSuSu/Android-DataBackup/releases/latest).
-
-## Translation
-[<img src="https://hosted.weblate.org/widget/databackup/main/open-graph.png"
-     alt="Translation">](https://hosted.weblate.org/engage/databackup/)
-
-## Contributors
-Thanks to all these wonderful people!
-
-[![Contributors](https://contrib.rocks/image?repo=XayahSuSuSu/Android-DataBackup)](https://github.com/XayahSuSuSu/Android-DataBackup/graphs/contributors)
-
-## Support
-If you enjoy this app and want to help it become better, feel free to sponsor me!
-
-<!-- [<img src="./docs/static/img/bmc-button.svg"
-     alt="Buy Me a Coffee"
-     height="60">](https://www.buymeacoffee.com/XayahSuSuSu)[<img src="./docs/static/img/afdian.svg"
-     alt=爱发电
-     height="60">](https://afdian.net/a/XayahSuSuSu) -->
-
-[<img src="./docs/static/img/pp_h_rgb.svg"
-     alt="PayPal"
-     height="60">](https://paypal.me/XayahSuSuSu)
-
-[<img src="./docs/static/img/afdian.svg"
-     alt=爱发电
-     height="60">](https://afdian.net/a/XayahSuSuSu)
-
-## LICENSE
 [GNU General Public License v3.0](./LICENSE)

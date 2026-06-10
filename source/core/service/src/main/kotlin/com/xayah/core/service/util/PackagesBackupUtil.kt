@@ -407,4 +407,10 @@ class PackagesBackupUtil @Inject constructor(
             t.updateInfo(dataType = dataType, state = if (isSuccess) OperationState.DONE else OperationState.ERROR, log = t.getLog(dataType) + "\n${outString}", content = "100%")
         }
     }
+
+    suspend fun enqueueUpload(cloud: String, p: PackageEntity, dataType: DataType, srcDir: String, dstDir: String) {
+        val ct = p.indexInfo.compressionType
+        val src = packageRepository.getArchiveDst(dstDir = srcDir, dataType = dataType, ct = ct)
+        cloudRepository.enqueueUpload(cloud = cloud, src = src, dstDir = dstDir)
+    }
 }

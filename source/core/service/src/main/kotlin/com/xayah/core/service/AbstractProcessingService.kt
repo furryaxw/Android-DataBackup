@@ -35,6 +35,7 @@ import kotlinx.coroutines.sync.withLock
 
 internal abstract class AbstractProcessingService : Service() {
     override fun onBind(intent: Intent): IBinder {
+        mBoundIntent = intent
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(1, NotificationUtil.getForegroundNotification(applicationContext), FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
@@ -113,6 +114,7 @@ internal abstract class AbstractProcessingService : Service() {
 
     private val mBinder = OperationLocalBinder()
     private val mMutex = Mutex()
+    protected var mBoundIntent: Intent? = null
     protected val mContext: Context by lazy { applicationContext }
     protected abstract val mTAG: String
     protected abstract val mRootService: RemoteRootService

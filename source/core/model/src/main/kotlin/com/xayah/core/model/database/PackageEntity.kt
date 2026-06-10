@@ -172,6 +172,39 @@ data class PackageIndexInfo(
 )
 
 @Serializable
+data class PackageSnapshotInfo(
+    @ColumnInfo(defaultValue = "0") var repositorySource: Boolean = false,
+    @ColumnInfo(defaultValue = "") var apkSnapshotId: String = "",
+    @ColumnInfo(defaultValue = "") var userSnapshotId: String = "",
+    @ColumnInfo(defaultValue = "") var userDeSnapshotId: String = "",
+    @ColumnInfo(defaultValue = "") var dataSnapshotId: String = "",
+    @ColumnInfo(defaultValue = "") var obbSnapshotId: String = "",
+    @ColumnInfo(defaultValue = "") var mediaSnapshotId: String = "",
+) {
+    fun snapshotIdFor(dataType: DataType): String = when (dataType) {
+        DataType.PACKAGE_APK -> apkSnapshotId
+        DataType.PACKAGE_USER -> userSnapshotId
+        DataType.PACKAGE_USER_DE -> userDeSnapshotId
+        DataType.PACKAGE_DATA -> dataSnapshotId
+        DataType.PACKAGE_OBB -> obbSnapshotId
+        DataType.PACKAGE_MEDIA -> mediaSnapshotId
+        else -> ""
+    }
+
+    fun setSnapshotId(dataType: DataType, snapshotId: String) {
+        when (dataType) {
+            DataType.PACKAGE_APK -> apkSnapshotId = snapshotId
+            DataType.PACKAGE_USER -> userSnapshotId = snapshotId
+            DataType.PACKAGE_USER_DE -> userDeSnapshotId = snapshotId
+            DataType.PACKAGE_DATA -> dataSnapshotId = snapshotId
+            DataType.PACKAGE_OBB -> obbSnapshotId = snapshotId
+            DataType.PACKAGE_MEDIA -> mediaSnapshotId = snapshotId
+            else -> {}
+        }
+    }
+}
+
+@Serializable
 @Entity
 data class PackageEntity(
     @PrimaryKey(autoGenerate = true) var id: Long,
@@ -182,6 +215,7 @@ data class PackageEntity(
     @Embedded(prefix = "storageStats_") var storageStats: PackageStorageStats,   // Storage stats from system api
     @Embedded(prefix = "dataStats_") var dataStats: PackageDataStats,            // Storage stats for backing up
     @Embedded(prefix = "displayStats_") var displayStats: PackageDataStats,      // Storage stats for display
+    @Embedded(prefix = "snapshotInfo_") var snapshotInfo: PackageSnapshotInfo = PackageSnapshotInfo(),
 ) {
     val packageName: String
         get() = indexInfo.packageName
@@ -209,6 +243,8 @@ data class PackageEntity(
 
     val mediaSelected: Boolean
         get() = dataStates.mediaState == DataState.Selected
+
+    fun repositorySnapshotId(dataType: DataType): String = snapshotInfo.snapshotIdFor(dataType)
 
     companion object {
         const val FLAG_NONE = 0

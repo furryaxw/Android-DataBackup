@@ -25,6 +25,7 @@ class SplashActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         installSplashScreen()
+        WorkManagerInitializer.cancelCloudUpload(this)
 
         if (getCurrentAppVersionName() > runBlocking { readAppVersionName().first() }) {
             // There is an update

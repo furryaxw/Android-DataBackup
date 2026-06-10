@@ -1,17 +1,17 @@
 package com.xayah.core.service.medium.backup
 
 import com.xayah.core.data.repository.MediaRepository
+import com.xayah.core.data.repository.BackupEngineRepository
+import com.xayah.core.data.repository.CloudRepository
+import com.xayah.core.data.repository.RepositoryLayout
 import com.xayah.core.data.repository.TaskRepository
 import com.xayah.core.database.dao.MediaDao
 import com.xayah.core.database.dao.TaskDao
 import com.xayah.core.model.OpType
 import com.xayah.core.model.TaskType
-import com.xayah.core.model.database.MediaEntity
-import com.xayah.core.model.database.TaskDetailMediaEntity
 import com.xayah.core.model.database.TaskEntity
 import com.xayah.core.rootservice.service.RemoteRootService
 import com.xayah.core.service.util.CommonBackupUtil
-import com.xayah.core.service.util.MediumBackupUtil
 import com.xayah.core.util.PathUtil
 import com.xayah.core.util.localBackupSaveDir
 import dagger.hilt.android.AndroidEntryPoint
@@ -48,12 +48,6 @@ internal class BackupServiceLocalImpl @Inject constructor() : AbstractBackupServ
         )
     }
 
-    override suspend fun backup(m: MediaEntity, r: MediaEntity?, t: TaskDetailMediaEntity, dstDir: String) {
-        mMediumBackupUtil.backupMedia(m = m, t = t, r = r, dstDir = dstDir)
-        t.update(progress = 1f)
-        t.update(processingIndex = t.processingIndex + 1)
-    }
-
     @Inject
     override lateinit var mMediaDao: MediaDao
 
@@ -61,9 +55,21 @@ internal class BackupServiceLocalImpl @Inject constructor() : AbstractBackupServ
     override lateinit var mMediaRepo: MediaRepository
 
     @Inject
-    override lateinit var mMediumBackupUtil: MediumBackupUtil
+    override lateinit var mBackupEngineRepo: BackupEngineRepository
+
+    @Inject
+    lateinit var mCloudRepo: CloudRepository
 
     override val mRootDir by lazy { mContext.localBackupSaveDir() }
     override val mFilesDir by lazy { mPathUtil.getLocalBackupFilesDir() }
     override val mConfigsDir by lazy { mPathUtil.getLocalBackupConfigsDir() }
+
+    override suspend fun afterPostProcessing() {
+        super.afterPostProcessing()
+        runCatching {
+            mCloudRepo.refreshLocalRepositoryMeta(RepositoryLayout.fromRoot(mRootDir).repositoryRoot)
+        }.onFailure {
+            log { "Failed to refresh local repository meta after media backup: ${it.localizedMessage ?: it}" }
+        }
+    }
 }

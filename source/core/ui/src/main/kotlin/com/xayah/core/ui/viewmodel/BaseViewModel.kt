@@ -53,7 +53,18 @@ abstract class BaseViewModel<S : UiState, I : UiIntent, E : IndexUiEffect>(state
     override suspend fun onEffect(effect: IndexUiEffect) {
         when (effect) {
             is IndexUiEffect.ShowSnackbar -> {
-                when (snackbarHostState.showSnackbar(effect.message, effect.type, effect.actionLabel, effect.withDismissAction, effect.duration)) {
+                if (effect.actionLabel == null && effect.onActionPerformed == null && effect.onDismissed == null) {
+                    withMainContext {
+                        snackbarHostState.showSnackbarImmediately(
+                            message = effect.message,
+                            type = effect.type,
+                            withDismissAction = effect.withDismissAction,
+                            duration = effect.duration,
+                        )
+                    }
+                    return
+                }
+                when (withMainContext { snackbarHostState.showSnackbar(effect.message, effect.type, effect.actionLabel, effect.withDismissAction, effect.duration) }) {
                     SnackbarResult.ActionPerformed -> {
                         effect.onActionPerformed?.invoke()
                     }
@@ -65,7 +76,9 @@ abstract class BaseViewModel<S : UiState, I : UiIntent, E : IndexUiEffect>(state
             }
 
             is IndexUiEffect.DismissSnackbar -> {
-                snackbarHostState.currentSnackbarData?.dismiss()
+                withMainContext {
+                    snackbarHostState.currentSnackbarData?.dismiss()
+                }
             }
         }
     }
@@ -82,9 +95,9 @@ abstract class BaseViewModel<S : UiState, I : UiIntent, E : IndexUiEffect>(state
 
     fun emitEffectOnIO(effect: E) = launchOnIO { emitEffect(effect) }
 
-    suspend fun withIOContext(block: suspend CoroutineScope.() -> Unit) = withContext(Dispatchers.IO, block = block)
+    suspend fun <T> withIOContext(block: suspend CoroutineScope.() -> T): T = withContext(Dispatchers.IO, block = block)
 
-    suspend fun withMainContext(block: suspend CoroutineScope.() -> Unit) = withContext(Dispatchers.Main, block = block)
+    suspend fun <T> withMainContext(block: suspend CoroutineScope.() -> T): T = withContext(Dispatchers.Main, block = block)
 
     fun launchOnIO(block: suspend CoroutineScope.() -> Unit) = viewModelScope.launch(context = Dispatchers.IO, block = block)
 

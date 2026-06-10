@@ -15,7 +15,28 @@
     <item name="version" type="string"/>
     <item name="name" type="string"/>
     <item name="cloud" type="string"/>
+    <item name="sync" type="string"/>
+    <item name="local_repository" type="string"/>
+    <item name="cloud_repository" type="string"/>
+    <item name="force_push" type="string"/>
+    <item name="force_pull" type="string"/>
+    <item name="force_pull_warning" type="string"/>
+    <item name="transfer_progress" type="string"/>
+    <item name="transfer_speed" type="string"/>
+    <item name="cloud_state_cached_at" type="string"/>
+    <item name="sync_engine_not_ready" type="string"/>
+    <item name="no_available_cloud_accounts" type="string"/>
     <item name="account" type="string"/>
+    <item name="refresh" type="string"/>
+    <item name="never" type="string"/>
+    <item name="pause" type="string"/>
+    <item name="cancel" type="string"/>
+    <item name="sync_paused" type="string"/>
+    <item name="sync_cancelled" type="string"/>
+    <item name="existing_files" type="string"/>
+    <item name="failed" type="string"/>
+    <item name="log" type="string"/>
+    <item name="succeed" type="string"/>
     <item name="_continue" type="string"/>
     <item name="ftp_setup" type="string"/>
     <item name="webdav_setup" type="string"/>

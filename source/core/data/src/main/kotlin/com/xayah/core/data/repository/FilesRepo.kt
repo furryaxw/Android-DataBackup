@@ -53,14 +53,15 @@ class FilesRepo @Inject constructor(
         refs: Flow<List<LabelFileCrossRefEntity>>,
         labels: Flow<Set<String>>,
         cloudName: String,
-        backupDir: String
+        backupDir: String,
+        repositorySource: Boolean,
     ): Flow<List<File>> = combine(
         listData,
         refs,
         labels,
         when (opType) {
             OpType.BACKUP -> filesDao.queryFilesFlow(opType = opType, existed = true, blocked = false)
-            OpType.RESTORE -> filesDao.queryFilesFlow(opType = opType, cloud = cloudName, backupDir = backupDir)
+            OpType.RESTORE -> filesDao.queryFilesFlow(opType = opType, cloud = cloudName, backupDir = backupDir, repositorySource = repositorySource)
         }
     ) { lData, lRefs, lLabels, files ->
         val data = lData.castTo<ListData.Files>()
@@ -72,8 +73,15 @@ class FilesRepo @Inject constructor(
             .map(MediaEntity::asExternalModel)
     }.flowOn(defaultDispatcher)
 
-    fun countFiles(opType: OpType) = filesDao.countFilesFlow(opType = opType, existed = true, blocked = false)
-    fun countSelectedFiles(opType: OpType) = filesDao.countActivatedFilesFlow(opType = opType, existed = true, blocked = false)
+    fun countFiles(opType: OpType, cloudName: String, backupDir: String, repositorySource: Boolean) = when (opType) {
+        OpType.BACKUP -> filesDao.countFilesFlow(opType = opType, existed = true, blocked = false)
+        OpType.RESTORE -> filesDao.countFilesFlow(opType = opType, existed = true, blocked = false, cloud = cloudName, backupDir = backupDir, repositorySource = repositorySource)
+    }
+
+    fun countSelectedFiles(opType: OpType, cloudName: String, backupDir: String, repositorySource: Boolean) = when (opType) {
+        OpType.BACKUP -> filesDao.countActivatedFilesFlow(opType = opType, existed = true, blocked = false)
+        OpType.RESTORE -> filesDao.countActivatedFilesFlow(opType = opType, existed = true, blocked = false, cloud = cloudName, backupDir = backupDir, repositorySource = repositorySource)
+    }
 
     suspend fun selectFile(id: Long, selected: Boolean) {
         filesDao.activateById(id, selected)
@@ -183,8 +191,9 @@ class FilesRepo @Inject constructor(
                         m?.extraInfo?.activated = false
                         m?.indexInfo?.cloud = ""
                         m?.indexInfo?.backupDir = context.localBackupSaveDir()
+                        m?.snapshotInfo?.repositorySource = false
                     }?.apply {
-                        if (filesDao.query(indexInfo.opType, preserveId, name, indexInfo.compressionType, indexInfo.cloud, indexInfo.backupDir) == null) {
+                        if (filesDao.query(indexInfo.opType, preserveId, name, indexInfo.compressionType, indexInfo.cloud, indexInfo.backupDir, repositorySource = false) == null) {
                             filesDao.upsert(this)
                         }
                     }
@@ -212,8 +221,9 @@ class FilesRepo @Inject constructor(
                                     p?.extraInfo?.activated = false
                                     p?.indexInfo?.cloud = entity.name
                                     p?.indexInfo?.backupDir = remote
+                                    p?.snapshotInfo?.repositorySource = false
                                 }?.apply {
-                                    if (filesDao.query(indexInfo.opType, preserveId, name, indexInfo.compressionType, indexInfo.cloud, indexInfo.backupDir) == null) {
+                                    if (filesDao.query(indexInfo.opType, preserveId, name, indexInfo.compressionType, indexInfo.cloud, indexInfo.backupDir, repositorySource = false) == null) {
                                         filesDao.upsert(this)
                                     }
                                 }

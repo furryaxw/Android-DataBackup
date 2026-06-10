@@ -28,7 +28,10 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 class WebDAVClientImpl(private val entity: CloudEntity, private val extra: WebDAVExtra) : CloudClient {
+    override val entityName: String = entity.name
+
     private var client: OkHttpSardine? = null
+    private var okHttpClient: OkHttpClient? = null
 
     private fun log(msg: () -> String): String = run {
         LogUtil.log { "WebDAVClientImpl" to msg() }
@@ -67,13 +70,18 @@ class WebDAVClientImpl(private val entity: CloudEntity, private val extra: WebDA
             }
         }
 
-        client = OkHttpSardine(builder.build()).apply {
-            setCredentials(entity.user, entity.pass)
-            list(entity.host)
-        }
+        val httpClient = builder.build()
+        okHttpClient = httpClient
+        val sardine = OkHttpSardine(httpClient)
+        client = sardine
+        sardine.setCredentials(entity.user, entity.pass)
+        sardine.list(entity.host)
     }
 
     override fun disconnect() {
+        okHttpClient?.dispatcher?.cancelAll()
+        okHttpClient?.connectionPool?.evictAll()
+        okHttpClient = null
         client = null
     }
 
@@ -109,11 +117,11 @@ class WebDAVClientImpl(private val entity: CloudEntity, private val extra: WebDA
         val name = PathUtil.getFileName(src)
         val dstPath = "${dst}/$name"
         log { "download: ${getPath(src)} to $dstPath" }
-        val dstOutputStream = File(dstPath).outputStream()
-        val srcInputStream = client.get(getPath(src))
-        srcInputStream.copyTo(dstOutputStream)
-        srcInputStream.close()
-        dstOutputStream.close()
+        File(dstPath).outputStream().use { dstOutputStream ->
+            client.get(getPath(src)).use { srcInputStream ->
+                srcInputStream.copyTo(dstOutputStream)
+            }
+        }
     }
 
     override fun deleteFile(src: String) = withClient { client ->

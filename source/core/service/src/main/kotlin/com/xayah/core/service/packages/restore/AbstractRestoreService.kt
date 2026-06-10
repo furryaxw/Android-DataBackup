@@ -1,22 +1,29 @@
 package com.xayah.core.service.packages.restore
 
 import android.annotation.SuppressLint
+import com.xayah.core.data.repository.BackupEngineRepository
 import com.xayah.core.datastore.readKillAppOption
 import com.xayah.core.datastore.readResetRestoreList
 import com.xayah.core.datastore.readRestorePermissions
 import com.xayah.core.datastore.readRestoreSsaid
 import com.xayah.core.datastore.readRestoreUser
+import com.xayah.core.datastore.readSelectionType
 import com.xayah.core.datastore.saveLastRestoreTime
+import com.xayah.core.model.DataState
 import com.xayah.core.model.DataType
 import com.xayah.core.model.OpType
 import com.xayah.core.model.OperationState
 import com.xayah.core.model.ProcessingInfoType
 import com.xayah.core.model.ProcessingType
+import com.xayah.core.model.RESTORE_SOURCE_ARG
+import com.xayah.core.model.RestoreSource
+import com.xayah.core.model.SelectionType
 import com.xayah.core.model.TaskType
 import com.xayah.core.model.database.Info
 import com.xayah.core.model.database.PackageEntity
 import com.xayah.core.model.database.ProcessingInfoEntity
 import com.xayah.core.model.database.TaskDetailPackageEntity
+import com.xayah.core.model.util.of
 import com.xayah.core.service.R
 import com.xayah.core.service.packages.AbstractPackagesService
 import com.xayah.core.service.util.PackagesRestoreUtil
@@ -83,8 +90,35 @@ internal abstract class AbstractRestoreService : AbstractPackagesService() {
     protected open suspend fun clear() {}
 
     protected abstract val mPackagesRestoreUtil: PackagesRestoreUtil
+    protected abstract val mBackupEngineRepo: BackupEngineRepository
+
+    protected val mRestoreSource: RestoreSource
+        get() = RestoreSource.of(mBoundIntent?.getStringExtra(RESTORE_SOURCE_ARG))
+    protected val mRepositorySource: Boolean
+        get() = mRestoreSource == RestoreSource.REPOSITORY
 
     private var restoreUser = -1
+
+    private fun PackageEntity.repositoryDataState(dataType: DataType): DataState = when (dataType) {
+        DataType.PACKAGE_APK -> dataStates.apkState
+        DataType.PACKAGE_USER -> dataStates.userState
+        DataType.PACKAGE_USER_DE -> dataStates.userDeState
+        DataType.PACKAGE_DATA -> dataStates.dataState
+        DataType.PACKAGE_OBB -> dataStates.obbState
+        DataType.PACKAGE_MEDIA -> dataStates.mediaState
+        else -> DataState.Disabled
+    }
+
+    private suspend fun PackageEntity.repositoryDataSelected(dataType: DataType): Boolean = when (mContext.readSelectionType().first()) {
+        SelectionType.DEFAULT -> repositoryDataState(dataType) == DataState.Selected
+        SelectionType.APK -> dataType == DataType.PACKAGE_APK
+        SelectionType.DATA -> dataType != DataType.PACKAGE_APK
+        SelectionType.BOTH -> true
+    }
+
+    private fun PackageEntity.repositorySnapshotIdOrLegacyLatest(dataType: DataType): String {
+        return repositorySnapshotId(dataType).ifBlank { BackupEngineRepository.LEGACY_LATEST_SNAPSHOT_ID }
+    }
 
     override suspend fun onPreprocessing(entity: ProcessingInfoEntity) {
         restoreUser = mContext.readRestoreUser().first()
@@ -130,17 +164,56 @@ internal abstract class AbstractRestoreService : AbstractPackagesService() {
                 val p = pkg.packageEntity
                 val srcDir = "${mAppsDir}/${p.archivesRelativeDir}"
                 val userId = if (restoreUser == -1) p.userId else restoreUser
-                restore(type = DataType.PACKAGE_APK, userId = userId, p = p, t = pkg, srcDir = srcDir)
-                restore(type = DataType.PACKAGE_USER, userId = userId, p = p, t = pkg, srcDir = srcDir)
-                restore(type = DataType.PACKAGE_USER_DE, userId = userId, p = p, t = pkg, srcDir = srcDir)
-                restore(type = DataType.PACKAGE_DATA, userId = userId, p = p, t = pkg, srcDir = srcDir)
-                restore(type = DataType.PACKAGE_OBB, userId = userId, p = p, t = pkg, srcDir = srcDir)
-                restore(type = DataType.PACKAGE_MEDIA, userId = userId, p = p, t = pkg, srcDir = srcDir)
-                if (mContext.readRestorePermissions().first()) {
-                    mPackagesRestoreUtil.restorePermissions(userId = userId, p = p)
-                }
-                if (mContext.readRestoreSsaid().first()) {
-                    mPackagesRestoreUtil.restoreSsaid(userId = userId, p = p)
+                if (mRepositorySource) {
+                    listOf(
+                        DataType.PACKAGE_APK, DataType.PACKAGE_USER, DataType.PACKAGE_USER_DE,
+                        DataType.PACKAGE_DATA, DataType.PACKAGE_OBB, DataType.PACKAGE_MEDIA,
+                    ).forEach { type ->
+                        if (p.repositoryDataState(type) == DataState.Disabled) {
+                            pkg.update(dataType = type, state = OperationState.SKIP, progress = 1f, log = "No repository snapshot metadata for ${type.name}.")
+                            return@forEach
+                        }
+                        if (p.repositoryDataSelected(type).not()) {
+                            pkg.update(dataType = type, state = OperationState.SKIP, progress = 1f)
+                            return@forEach
+                        }
+                        val targetDir = if (type == DataType.PACKAGE_APK) mPathUtil.getTmpApkPath(p.packageName) else mPackageRepo.getDataSrcDir(type, userId)
+                        if (type == DataType.PACKAGE_APK) {
+                            mRootService.deleteRecursively(targetDir)
+                            mRootService.mkdirs(targetDir)
+                        }
+                        val snapshotId = p.repositorySnapshotIdOrLegacyLatest(type)
+                        val result = mBackupEngineRepo.restoreDataType(p, type, targetDir, snapshotId)
+                        if (result.isSuccess && type == DataType.PACKAGE_APK) {
+                            val installResult = mPackagesRestoreUtil.restoreApksFromDirectory(userId = userId, p = p, t = pkg, srcDir = targetDir)
+                            pkg.update(dataType = type, state = if (installResult.isSuccess) OperationState.DONE else OperationState.ERROR, progress = 1f, log = installResult.outString)
+                            mRootService.deleteRecursively(targetDir)
+                        } else if (result.isSuccess) {
+                            pkg.update(dataType = type, state = OperationState.DONE, progress = 1f)
+                        } else {
+                            pkg.update(dataType = type, state = OperationState.ERROR, log = result.toString())
+                            if (type == DataType.PACKAGE_APK) mRootService.deleteRecursively(targetDir)
+                        }
+                    }
+                    if (mContext.readRestorePermissions().first()) {
+                        mPackagesRestoreUtil.restorePermissions(userId = userId, p = p)
+                    }
+                    if (mContext.readRestoreSsaid().first()) {
+                        mPackagesRestoreUtil.restoreSsaid(userId = userId, p = p)
+                    }
+                } else {
+                    restore(type = DataType.PACKAGE_APK, userId = userId, p = p, t = pkg, srcDir = srcDir)
+                    restore(type = DataType.PACKAGE_USER, userId = userId, p = p, t = pkg, srcDir = srcDir)
+                    restore(type = DataType.PACKAGE_USER_DE, userId = userId, p = p, t = pkg, srcDir = srcDir)
+                    restore(type = DataType.PACKAGE_DATA, userId = userId, p = p, t = pkg, srcDir = srcDir)
+                    restore(type = DataType.PACKAGE_OBB, userId = userId, p = p, t = pkg, srcDir = srcDir)
+                    restore(type = DataType.PACKAGE_MEDIA, userId = userId, p = p, t = pkg, srcDir = srcDir)
+                    if (mContext.readRestorePermissions().first()) {
+                        mPackagesRestoreUtil.restorePermissions(userId = userId, p = p)
+                    }
+                    if (mContext.readRestoreSsaid().first()) {
+                        mPackagesRestoreUtil.restoreSsaid(userId = userId, p = p)
+                    }
                 }
 
                 if (pkg.isSuccess) {

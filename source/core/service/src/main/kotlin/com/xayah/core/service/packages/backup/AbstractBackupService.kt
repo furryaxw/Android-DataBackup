@@ -2,21 +2,25 @@ package com.xayah.core.service.packages.backup
 
 import android.annotation.SuppressLint
 import com.xayah.core.common.util.toLineString
+import com.xayah.core.data.repository.BackupEngineRepository
+import com.xayah.core.data.repository.BackupRetryRepository
 import com.xayah.core.datastore.readBackupConfigs
 import com.xayah.core.datastore.readBackupItself
 import com.xayah.core.datastore.readKillAppOption
 import com.xayah.core.datastore.readResetBackupList
+import com.xayah.core.datastore.readSelectionType
 import com.xayah.core.datastore.saveLastBackupTime
 import com.xayah.core.model.DataType
 import com.xayah.core.model.OpType
 import com.xayah.core.model.OperationState
 import com.xayah.core.model.ProcessingInfoType
 import com.xayah.core.model.ProcessingType
-import com.xayah.core.model.TaskType
+import com.xayah.core.model.SelectionType
 import com.xayah.core.model.database.Info
 import com.xayah.core.model.database.PackageEntity
 import com.xayah.core.model.database.ProcessingInfoEntity
 import com.xayah.core.model.database.TaskDetailPackageEntity
+import com.xayah.core.model.util.get
 import com.xayah.core.model.util.set
 import com.xayah.core.service.R
 import com.xayah.core.service.model.NecessaryInfo
@@ -73,7 +77,9 @@ internal abstract class AbstractBackupService : AbstractPackagesService() {
 
     @SuppressLint("StringFormatInvalid")
     override suspend fun onInitializing() {
-        val packages = mPackageRepo.queryActivated(OpType.BACKUP)
+        val retryPackages = mBackupRetryRepo.queryRetryPackages()
+        isPackageRetry = retryPackages.isNotEmpty()
+        val packages = if (isPackageRetry) retryPackages else mPackageRepo.queryActivated(OpType.BACKUP)
         packages.forEach { pkg ->
             mPkgEntities.add(
                 TaskDetailPackageEntity(
@@ -97,15 +103,56 @@ internal abstract class AbstractBackupService : AbstractPackagesService() {
     }
 
     protected open suspend fun onTargetDirsCreated() {}
-    protected open suspend fun onAppDirCreated(archivesRelativeDir: String): Boolean = true
-    abstract suspend fun backup(type: DataType, p: PackageEntity, r: PackageEntity?, t: TaskDetailPackageEntity, dstDir: String)
-    protected open suspend fun onConfigSaved(path: String, archivesRelativeDir: String) {}
     protected open suspend fun onItselfSaved(path: String, entity: ProcessingInfoEntity) {}
     protected open suspend fun onConfigsSaved(path: String, entity: ProcessingInfoEntity) {}
     protected open suspend fun onIconsSaved(path: String, entity: ProcessingInfoEntity) {}
     protected open suspend fun clear() {}
 
     protected abstract val mPackagesBackupUtil: PackagesBackupUtil
+    protected abstract val mBackupEngineRepo: BackupEngineRepository
+    protected abstract val mBackupRetryRepo: BackupRetryRepository
+
+    private var isPackageRetry = false
+
+    private suspend fun TaskDetailPackageEntity.markUnfinishedAsError(message: String) {
+        listOf(
+            DataType.PACKAGE_APK,
+            DataType.PACKAGE_USER,
+            DataType.PACKAGE_USER_DE,
+            DataType.PACKAGE_DATA,
+            DataType.PACKAGE_OBB,
+            DataType.PACKAGE_MEDIA,
+        ).forEach { type ->
+            val state = get(type).state
+            if (state != OperationState.DONE && state != OperationState.SKIP) {
+                update(dataType = type, progress = 1f, state = OperationState.ERROR, log = message)
+            }
+        }
+    }
+
+    private suspend fun PackageEntity.repositoryDataSelected(dataType: DataType): Boolean = when (mContext.readSelectionType().first()) {
+        SelectionType.DEFAULT -> when (dataType) {
+            DataType.PACKAGE_APK -> apkSelected
+            DataType.PACKAGE_USER -> userSelected
+            DataType.PACKAGE_USER_DE -> userDeSelected
+            DataType.PACKAGE_DATA -> dataSelected
+            DataType.PACKAGE_OBB -> obbSelected
+            DataType.PACKAGE_MEDIA -> mediaSelected
+            else -> false
+        }
+        SelectionType.APK -> dataType == DataType.PACKAGE_APK
+        SelectionType.DATA -> dataType != DataType.PACKAGE_APK
+        SelectionType.BOTH -> true
+    }
+
+    private suspend fun PackageEntity.repositorySourcePath(dataType: DataType): String {
+        return if (dataType == DataType.PACKAGE_APK) {
+            mRootService.getPackageSourceDir(packageName, userId).firstOrNull()?.let { PathUtil.getParentPath(it) }.orEmpty()
+        } else {
+            val srcDir = mPackageRepo.getDataSrcDir(dataType, userId)
+            mPackageRepo.getDataSrc(srcDir, packageName)
+        }
+    }
 
     private lateinit var necessaryInfo: NecessaryInfo
 
@@ -121,9 +168,7 @@ internal abstract class AbstractBackupService : AbstractPackagesService() {
                 log { "InputMethods: ${necessaryInfo.inputMethods}." }
                 log { "AccessibilityServices: ${necessaryInfo.accessibilityServices}." }
 
-                log { "Trying to create: $mAppsDir." }
                 log { "Trying to create: $mConfigsDir." }
-                mRootService.mkdirs(mAppsDir)
                 mRootService.mkdirs(mConfigsDir)
                 val isSuccess = runCatchingOnService { onTargetDirsCreated() }
                 entity.update(progress = 1f, state = if (isSuccess) OperationState.DONE else OperationState.ERROR)
@@ -135,69 +180,101 @@ internal abstract class AbstractBackupService : AbstractPackagesService() {
 
     override suspend fun onProcessing() {
         // createTargetDirs() before readStatFs().
-        mTaskEntity.update(rawBytes = mTaskRepo.getRawBytes(TaskType.PACKAGE), availableBytes = mTaskRepo.getAvailableBytes(OpType.BACKUP), totalBytes = mTaskRepo.getTotalBytes(OpType.BACKUP), totalCount = mPkgEntities.size)
+        mTaskEntity.update(rawBytes = getRawBytes(), availableBytes = mTaskRepo.getAvailableBytes(OpType.BACKUP), totalBytes = mTaskRepo.getTotalBytes(OpType.BACKUP), totalCount = mPkgEntities.size)
         log { "Task count: ${mPkgEntities.size}." }
 
         val killAppOption = mContext.readKillAppOption().first()
         log { "Kill app option: $killAppOption" }
 
         mPkgEntities.forEachIndexed { index, pkg ->
-            executeAtLeast {
-                NotificationUtil.notify(
-                    mContext,
-                    mNotificationBuilder,
-                    mContext.getString(R.string.backing_up),
-                    pkg.packageEntity.packageInfo.label,
-                    mPkgEntities.size,
-                    index
-                )
-                log { "Current package: ${pkg.packageEntity}" }
+            var counted = false
+            runCatching {
+                executeAtLeast {
+                    NotificationUtil.notify(
+                        mContext,
+                        mNotificationBuilder,
+                        mContext.getString(R.string.backing_up),
+                        pkg.packageEntity.packageInfo.label,
+                        mPkgEntities.size,
+                        index
+                    )
+                    log { "Current package: ${pkg.packageEntity}" }
 
-                killApp(killAppOption, pkg)
+                    killApp(killAppOption, pkg)
 
-                pkg.update(state = OperationState.PROCESSING)
-                val p = pkg.packageEntity
-                val dstDir = "${mAppsDir}/${p.archivesRelativeDir}"
-                var restoreEntity = mPackageDao.query(p.packageName, OpType.RESTORE, p.userId, p.preserveId, p.indexInfo.compressionType, mTaskEntity.cloud, mTaskEntity.backupDir)
-                mRootService.mkdirs(dstDir)
-                if (onAppDirCreated(archivesRelativeDir = p.archivesRelativeDir)) {
-                    backup(type = DataType.PACKAGE_APK, p = p, r = restoreEntity, t = pkg, dstDir = dstDir)
-                    backup(type = DataType.PACKAGE_USER, p = p, r = restoreEntity, t = pkg, dstDir = dstDir)
-                    backup(type = DataType.PACKAGE_USER_DE, p = p, r = restoreEntity, t = pkg, dstDir = dstDir)
-                    backup(type = DataType.PACKAGE_DATA, p = p, r = restoreEntity, t = pkg, dstDir = dstDir)
-                    backup(type = DataType.PACKAGE_OBB, p = p, r = restoreEntity, t = pkg, dstDir = dstDir)
-                    backup(type = DataType.PACKAGE_MEDIA, p = p, r = restoreEntity, t = pkg, dstDir = dstDir)
-                    mPackagesBackupUtil.backupPermissions(p = p)
-                    mPackagesBackupUtil.backupSsaid(p = p)
+                    pkg.update(state = OperationState.PROCESSING)
+                    val p = pkg.packageEntity
+                    var restoreEntity = mPackageDao.query(p.packageName, OpType.RESTORE, p.userId, p.preserveId, p.indexInfo.compressionType, mTaskEntity.cloud, mTaskEntity.backupDir)
+                    val restoreSnapshotInfo = (restoreEntity?.snapshotInfo ?: p.snapshotInfo).copy()
+                    val repositoryEngineAvailable = mBackupEngineRepo.shouldUseRepositoryEngine()
+                    restoreSnapshotInfo.repositorySource = true
+                    if (repositoryEngineAvailable) {
+                            var allSnapshotsOk = true
+                            listOf(
+                                DataType.PACKAGE_APK, DataType.PACKAGE_USER, DataType.PACKAGE_USER_DE,
+                                DataType.PACKAGE_DATA, DataType.PACKAGE_OBB, DataType.PACKAGE_MEDIA,
+                            ).forEach { type ->
+                                if (p.repositoryDataSelected(type).not()) {
+                                    pkg.update(dataType = type, state = OperationState.SKIP, progress = 1f)
+                                    return@forEach
+                                }
+
+                                val src = p.repositorySourcePath(type)
+                                if (src.isBlank() || mRootService.exists(src).not()) {
+                                    val required = type == DataType.PACKAGE_APK || type == DataType.PACKAGE_USER
+                                    val message = "Not exist: $src"
+                                    pkg.update(dataType = type, state = if (required) OperationState.ERROR else OperationState.SKIP, progress = 1f, log = message)
+                                    allSnapshotsOk = allSnapshotsOk && required.not()
+                                    return@forEach
+                                }
+
+                                val result = mBackupEngineRepo.snapshotDataType(p, type, src)
+                                if (result is com.xayah.core.data.repository.RepositorySnapshotResult.Success) {
+                                    restoreSnapshotInfo.setSnapshotId(type, result.snapshotId)
+                                    pkg.update(dataType = type, state = OperationState.DONE, progress = 1f)
+                                } else {
+                                    pkg.update(dataType = type, state = OperationState.ERROR, log = result.toString())
+                                    allSnapshotsOk = false
+                                }
+                            }
+                            if (p.permissionSelected) mPackagesBackupUtil.backupPermissions(p = p)
+                            if (p.ssaidSelected) mPackagesBackupUtil.backupSsaid(p = p)
+                            if (allSnapshotsOk.not()) {
+                                log { "Repository snapshot failed for ${p.packageName}" }
+                            }
+                    } else {
+                        pkg.markUnfinishedAsError("Repository engine is unavailable.")
+                    }
 
                     if (pkg.isSuccess) {
-                        // Save config
-                        p.extraInfo.lastBackupTime = DateUtil.getTimestamp()
-                        val id = restoreEntity?.id ?: 0
-                        restoreEntity = p.copy(
-                            id = id,
-                            indexInfo = p.indexInfo.copy(opType = OpType.RESTORE, cloud = mTaskEntity.cloud, backupDir = mTaskEntity.backupDir),
-                            extraInfo = p.extraInfo.copy(activated = false)
-                        )
-                        val configDst = PathUtil.getPackageRestoreConfigDst(dstDir = dstDir)
-                        mRootService.writeJson(data = restoreEntity, dst = configDst)
-                        onConfigSaved(path = configDst, archivesRelativeDir = p.archivesRelativeDir)
-                        mPackageDao.upsert(restoreEntity)
-                        mPackageDao.upsert(p)
-                        pkg.update(packageEntity = p)
-                        mTaskEntity.update(successCount = mTaskEntity.successCount + 1)
-                    } else {
-                        mTaskEntity.update(failureCount = mTaskEntity.failureCount + 1)
-                    }
-                } else {
-                    pkg.update(dataType = DataType.PACKAGE_APK, state = OperationState.ERROR)
-                    pkg.update(dataType = DataType.PACKAGE_USER, state = OperationState.ERROR)
-                    pkg.update(dataType = DataType.PACKAGE_USER_DE, state = OperationState.ERROR)
-                    pkg.update(dataType = DataType.PACKAGE_DATA, state = OperationState.ERROR)
-                    pkg.update(dataType = DataType.PACKAGE_OBB, state = OperationState.ERROR)
-                    pkg.update(dataType = DataType.PACKAGE_MEDIA, state = OperationState.ERROR)
+                            // Save config
+                            p.extraInfo.lastBackupTime = DateUtil.getTimestamp()
+                            val id = restoreEntity?.id ?: 0
+                            restoreEntity = p.copy(
+                                id = id,
+                                indexInfo = p.indexInfo.copy(opType = OpType.RESTORE, cloud = mTaskEntity.cloud, backupDir = mTaskEntity.backupDir),
+                                extraInfo = p.extraInfo.copy(activated = false),
+                                snapshotInfo = restoreSnapshotInfo,
+                            )
+                            mPackageDao.upsert(restoreEntity)
+                            mPackageDao.upsert(p)
+                            pkg.update(packageEntity = p)
+                            mTaskEntity.update(successCount = mTaskEntity.successCount + 1)
+                            counted = true
+                        } else {
+                            mTaskEntity.update(failureCount = mTaskEntity.failureCount + 1)
+                            counted = true
+                        }
+                    pkg.update(state = if (pkg.isSuccess) OperationState.DONE else OperationState.ERROR)
                 }
-                pkg.update(state = if (pkg.isSuccess) OperationState.DONE else OperationState.ERROR)
+            }.onFailure { throwable ->
+                val message = throwable.stackTraceToString()
+                log { "Failed to back up ${pkg.packageEntity.packageName}: $message" }
+                pkg.markUnfinishedAsError(message)
+                pkg.update(state = OperationState.ERROR)
+                if (counted.not()) {
+                    mTaskEntity.update(failureCount = mTaskEntity.failureCount + 1)
+                }
             }
             mTaskEntity.update(processingIndex = mTaskEntity.processingIndex + 1)
         }
@@ -279,7 +356,7 @@ internal abstract class AbstractBackupService : AbstractPackagesService() {
                 } else {
                     log { "AccessibilityServices is empty, skip restoring." }
                 }
-                if (mContext.readResetBackupList().first() && mTaskEntity.failureCount == 0) {
+                if (mContext.readResetBackupList().first() && mTaskEntity.failureCount == 0 && isPackageRetry.not()) {
                     mPackageDao.clearActivated(OpType.BACKUP)
                 }
                 if (runCatchingOnService { clear() }.not()) {
@@ -293,6 +370,9 @@ internal abstract class AbstractBackupService : AbstractPackagesService() {
     }
 
     override suspend fun afterPostProcessing() {
+        if (isPackageRetry) {
+            mBackupRetryRepo.clearPackageRetry()
+        }
         mContext.saveLastBackupTime(mEndTimestamp)
         val time = DateUtil.getShortRelativeTimeSpanString(context = mContext, time1 = mStartTimestamp, time2 = mEndTimestamp)
         NotificationUtil.notify(
@@ -302,5 +382,19 @@ internal abstract class AbstractBackupService : AbstractPackagesService() {
             "${time}, ${mTaskEntity.successCount} ${mContext.getString(R.string.succeed)}, ${mTaskEntity.failureCount} ${mContext.getString(R.string.failed)}",
             ongoing = false
         )
+    }
+
+    private fun getRawBytes(): Double {
+        var total = 0.0
+        mPkgEntities.forEach {
+            val pkg = it.packageEntity
+            if (pkg.apkSelected) total += pkg.dataStats.apkBytes
+            if (pkg.userSelected) total += pkg.dataStats.userBytes
+            if (pkg.userDeSelected) total += pkg.dataStats.userDeBytes
+            if (pkg.dataSelected) total += pkg.dataStats.dataBytes
+            if (pkg.obbSelected) total += pkg.dataStats.obbBytes
+            if (pkg.mediaSelected) total += pkg.dataStats.mediaBytes
+        }
+        return total
     }
 }

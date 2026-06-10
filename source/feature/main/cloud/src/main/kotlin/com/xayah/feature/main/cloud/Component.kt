@@ -60,6 +60,7 @@ fun CloudScaffold(
     snackbarHostState: SnackbarHostState? = null,
     title: String,
     actions: @Composable RowScope.() -> Unit = {},
+    onBackClick: (() -> Unit)? = null,
     content: @Composable (BoxScope.() -> Unit)
 ) {
     Scaffold(
@@ -68,7 +69,8 @@ fun CloudScaffold(
             SecondaryLargeTopBar(
                 scrollBehavior = scrollBehavior,
                 title = title,
-                actions = actions
+                actions = actions,
+                onBackClick = onBackClick,
             )
         },
         snackbarHost = {

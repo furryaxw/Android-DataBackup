@@ -47,6 +47,15 @@ enum class StorageMode {
     Cloud
 }
 
+const val RESTORE_SOURCE_ARG = "restoreSource"
+
+enum class RestoreSource {
+    REPOSITORY,
+    LEGACY;
+
+    companion object
+}
+
 enum class StorageType {
     INTERNAL,
     EXTERNAL,
@@ -160,6 +169,43 @@ enum class KillAppOption {
     OPTION_II;
 
     companion object
+}
+
+enum class CloudSyncStrategy {
+    NEVER,
+    ON_SUCCESS,
+    ALWAYS;
+
+    companion object
+}
+
+enum class BackupCacheStrategy {
+    KEEP,
+    DELETE_AFTER_SYNC,
+    DELETE_WHEN_LOW_SPACE;
+
+    companion object
+}
+
+enum class SnapshotState {
+    IDLE,
+    SNAPSHOTTING,
+    DONE,
+    ERROR,
+}
+
+enum class CloudSyncState {
+    IDLE,
+    QUEUED,
+    UPLOADING,
+    DOWNLOADING,
+    DONE,
+    ERROR,
+}
+
+enum class SyncDirection {
+    PUSH,
+    PULL,
 }
 
 enum class ProcessingInfoType {

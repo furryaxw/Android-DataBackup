@@ -1,5 +1,6 @@
 package com.xayah.core.service.packages.restore
 
+import com.xayah.core.data.repository.BackupEngineRepository
 import com.xayah.core.data.repository.PackageRepository
 import com.xayah.core.data.repository.TaskRepository
 import com.xayah.core.database.dao.PackageDao
@@ -50,7 +51,7 @@ internal class RestoreServiceLocalImpl @Inject constructor() : AbstractRestoreSe
     }
 
     override suspend fun getPackages(): List<PackageEntity> {
-        return mPackageRepo.queryActivated(OpType.RESTORE, "", mRootDir)
+        return mPackageRepo.queryActivated(OpType.RESTORE, "", mRootDir, repositorySource = mRepositorySource)
     }
 
     override suspend fun restore(type: DataType, userId: Int, p: PackageEntity, t: TaskDetailPackageEntity, srcDir: String) {
@@ -71,6 +72,9 @@ internal class RestoreServiceLocalImpl @Inject constructor() : AbstractRestoreSe
 
     @Inject
     override lateinit var mPackagesRestoreUtil: PackagesRestoreUtil
+
+    @Inject
+    override lateinit var mBackupEngineRepo: BackupEngineRepository
 
     override val mRootDir by lazy { mContext.localBackupSaveDir() }
     override val mAppsDir by lazy { mPathUtil.getLocalBackupAppsDir() }

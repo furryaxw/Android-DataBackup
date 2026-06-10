@@ -3,6 +3,7 @@ package com.xayah.core.data.repository
 import com.xayah.core.model.App
 import com.xayah.core.model.File
 import com.xayah.core.model.OpType
+import com.xayah.core.model.RestoreSource
 import com.xayah.core.model.SortType
 import com.xayah.core.model.Target
 import com.xayah.core.model.UserInfo
@@ -50,18 +51,19 @@ class ListDataRepo @Inject constructor(
     private lateinit var fileList: Flow<List<File>>
     private lateinit var labelFileRefs: Flow<List<LabelFileCrossRefEntity>> // Labels filtered file refs
 
-    fun initialize(target: Target, opType: OpType, cloudName: String, backupDir: String) {
+    fun initialize(target: Target, opType: OpType, cloudName: String, backupDir: String, restoreSource: RestoreSource) {
+        val repositorySource = restoreSource == RestoreSource.REPOSITORY
         when (target) {
             Target.Apps -> {
-                selected = appsRepo.countSelectedApps(opType)
-                total = appsRepo.countApps(opType)
+                selected = appsRepo.countSelectedApps(opType, cloudName, backupDir, repositorySource)
+                total = appsRepo.countApps(opType, cloudName, backupDir, repositorySource)
                 searchQuery = MutableStateFlow("")
                 showFilterSheet = MutableStateFlow(false)
                 sortIndex = MutableStateFlow(0)
                 sortType = MutableStateFlow(SortType.ASCENDING)
                 isUpdating = when (opType) {
                     OpType.BACKUP -> combine(workRepo.isFullInitRunning(), workRepo.isFullInitAndUpdateAppsRunning(), workRepo.isFastInitAndUpdateAppsRunning()) { fInit, full, fast -> fInit || full || fast }
-                    OpType.RESTORE -> combine(workRepo.isFullInitRunning(), workRepo.isLoadAppBackupsRunning()) { fInit, lAppBackups -> fInit || lAppBackups }
+                    OpType.RESTORE -> workRepo.isFullInitRunning()
                 }
                 labels = MutableStateFlow(setOf())
                 labelAppRefs = labels.map {
@@ -81,8 +83,8 @@ class ListDataRepo @Inject constructor(
                     )
                 )
                 userIndex = MutableStateFlow(0)
-                userList = usersRepo.getUsers(opType)
-                userMap = usersRepo.getUsersMap(opType, cloudName, backupDir)
+                userList = usersRepo.getUsers(opType, cloudName, backupDir, repositorySource)
+                userMap = usersRepo.getUsersMap(opType, cloudName, backupDir, repositorySource)
 
                 listData = getAppListData()
                 pkgUserSet = when (opType) {
@@ -94,19 +96,28 @@ class ListDataRepo @Inject constructor(
                         appsRepo.getInstalledApps(userList)
                     }
                 }
-                appList = appsRepo.getApps(opType = opType, listData = listData, pkgUserSet = pkgUserSet, refs = labelAppRefs, labels = labels, cloudName = cloudName, backupDir = backupDir)
+                appList = appsRepo.getApps(
+                    opType = opType,
+                    listData = listData,
+                    pkgUserSet = pkgUserSet,
+                    refs = labelAppRefs,
+                    labels = labels,
+                    cloudName = cloudName,
+                    backupDir = backupDir,
+                    repositorySource = repositorySource,
+                )
             }
 
             Target.Files -> {
-                selected = filesRepo.countSelectedFiles(opType)
-                total = filesRepo.countFiles(opType)
+                selected = filesRepo.countSelectedFiles(opType, cloudName, backupDir, repositorySource)
+                total = filesRepo.countFiles(opType, cloudName, backupDir, repositorySource)
                 searchQuery = MutableStateFlow("")
                 showFilterSheet = MutableStateFlow(false)
                 sortIndex = MutableStateFlow(0)
                 sortType = MutableStateFlow(SortType.ASCENDING)
                 isUpdating = when (opType) {
                     OpType.BACKUP -> combine(workRepo.isFullInitRunning(), workRepo.isFastInitAndUpdateFilesRunning()) { fInit, fast -> fInit || fast }
-                    OpType.RESTORE -> combine(workRepo.isFullInitRunning(), workRepo.isLoadFileBackupsRunning()) { fInit, lFileBackups -> fInit || lFileBackups }
+                    OpType.RESTORE -> workRepo.isFullInitRunning()
                 }
                 labels = MutableStateFlow(setOf())
                 labelFileRefs = labels.map {
@@ -114,7 +125,15 @@ class ListDataRepo @Inject constructor(
                 }
 
                 listData = getFileListData()
-                fileList = filesRepo.getFiles(opType = opType, listData = listData, refs = labelFileRefs, labels = labels, cloudName = cloudName, backupDir = backupDir)
+                fileList = filesRepo.getFiles(
+                    opType = opType,
+                    listData = listData,
+                    refs = labelFileRefs,
+                    labels = labels,
+                    cloudName = cloudName,
+                    backupDir = backupDir,
+                    repositorySource = repositorySource,
+                )
             }
         }
     }

@@ -76,7 +76,7 @@ class AppsRepo @Inject constructor(
 ) {
     fun getBackups(filters: Flow<Filters>): Flow<Set<String>> = combine(
         filters,
-        appsDao.queryPackagesFlow(opType = OpType.RESTORE).flowOn(defaultDispatcher),
+        appsDao.queryPackagesFlowBySource(opType = OpType.RESTORE, repositorySource = true).flowOn(defaultDispatcher),
     ) { f, p ->
         p.filter { it.indexInfo.cloud == f.cloud && it.indexInfo.backupDir == f.backupDir }.map { it.pkgUserKey }.toSet()
     }
@@ -98,7 +98,8 @@ class AppsRepo @Inject constructor(
         refs: Flow<List<LabelAppCrossRefEntity>>,
         labels: Flow<Set<String>>,
         cloudName: String,
-        backupDir: String
+        backupDir: String,
+        repositorySource: Boolean,
     ): Flow<List<App>> = combine(
         listData,
         pkgUserSet,
@@ -106,7 +107,7 @@ class AppsRepo @Inject constructor(
         labels,
         when (opType) {
             OpType.BACKUP -> appsDao.queryPackagesFlow(opType = opType, blocked = false)
-            OpType.RESTORE -> appsDao.queryPackagesFlow(opType = opType, cloud = cloudName, backupDir = backupDir)
+            OpType.RESTORE -> appsDao.queryPackagesFlow(opType = opType, cloud = cloudName, backupDir = backupDir, repositorySource = repositorySource)
         }
     ) { lData, pSet, lRefs, lLabels, apps ->
         val data = lData.castTo<ListData.Apps>()
@@ -124,8 +125,15 @@ class AppsRepo @Inject constructor(
             .map(PackageEntity::asExternalModel)
     }.flowOn(defaultDispatcher)
 
-    fun countApps(opType: OpType) = appsDao.countPackagesFlow(opType = opType, blocked = false)
-    fun countSelectedApps(opType: OpType) = appsDao.countActivatedPackagesFlow(opType = opType, blocked = false)
+    fun countApps(opType: OpType, cloudName: String, backupDir: String, repositorySource: Boolean) = when (opType) {
+        OpType.BACKUP -> appsDao.countPackagesFlow(opType = opType, blocked = false)
+        OpType.RESTORE -> appsDao.countPackagesFlow(opType = opType, blocked = false, cloud = cloudName, backupDir = backupDir, repositorySource = repositorySource)
+    }
+
+    fun countSelectedApps(opType: OpType, cloudName: String, backupDir: String, repositorySource: Boolean) = when (opType) {
+        OpType.BACKUP -> appsDao.countActivatedPackagesFlow(opType = opType, blocked = false)
+        OpType.RESTORE -> appsDao.countActivatedPackagesFlow(opType = opType, blocked = false, cloud = cloudName, backupDir = backupDir, repositorySource = repositorySource)
+    }
 
     suspend fun getLoadSystemApps() = context.readLoadSystemApps().first()
 
@@ -481,6 +489,7 @@ class AppsRepo @Inject constructor(
                         p?.extraInfo?.activated = false
                         p?.indexInfo?.cloud = ""
                         p?.indexInfo?.backupDir = context.localBackupSaveDir()
+                        p?.snapshotInfo?.repositorySource = false
                         parsePreserveAndUserId(pathParcelable).also { result ->
                             result?.also { (pId, uId) ->
                                 p?.indexInfo?.preserveId = pId
@@ -488,7 +497,7 @@ class AppsRepo @Inject constructor(
                             }
                         }
                     }?.apply {
-                        if (appsDao.query(packageName, indexInfo.opType, userId, preserveId, indexInfo.compressionType, indexInfo.cloud, indexInfo.backupDir) == null) {
+                        if (appsDao.query(packageName, indexInfo.opType, userId, preserveId, indexInfo.compressionType, indexInfo.cloud, indexInfo.backupDir, repositorySource = false) == null) {
                             appsDao.upsert(this)
                         }
                     }
@@ -496,7 +505,7 @@ class AppsRepo @Inject constructor(
             }
         }
         rootService.clearEmptyDirectoriesRecursively(path)
-        appsDao.queryPackages(OpType.RESTORE, "", context.localBackupSaveDir()).forEach {
+        appsDao.queryPackages(OpType.RESTORE, "", context.localBackupSaveDir(), repositorySource = false).forEach {
             val src = "${path}/${it.archivesRelativeDir}"
             if (rootService.exists(src).not()) {
                 appsDao.delete(it.id)
@@ -522,6 +531,7 @@ class AppsRepo @Inject constructor(
                                     p?.extraInfo?.activated = false
                                     p?.indexInfo?.cloud = entity.name
                                     p?.indexInfo?.backupDir = remote
+                                    p?.snapshotInfo?.repositorySource = false
                                     parsePreserveAndUserId(pathParcelable).also { result ->
                                         result?.also { (pId, uId) ->
                                             p?.indexInfo?.preserveId = pId
@@ -529,7 +539,7 @@ class AppsRepo @Inject constructor(
                                         }
                                     }
                                 }?.apply {
-                                    if (appsDao.query(packageName, indexInfo.opType, userId, preserveId, indexInfo.compressionType, indexInfo.cloud, indexInfo.backupDir) == null) {
+                                    if (appsDao.query(packageName, indexInfo.opType, userId, preserveId, indexInfo.compressionType, indexInfo.cloud, indexInfo.backupDir, repositorySource = false) == null) {
                                         appsDao.upsert(this)
                                     }
                                 }
@@ -537,7 +547,7 @@ class AppsRepo @Inject constructor(
                         }
                     }
                 }
-                appsDao.queryPackages(OpType.RESTORE, entity.name, entity.remote).forEach {
+                appsDao.queryPackages(OpType.RESTORE, entity.name, entity.remote, repositorySource = false).forEach {
                     val src = "${path}/${it.archivesRelativeDir}"
                     if (client.exists(src).not()) {
                         appsDao.delete(it.id)

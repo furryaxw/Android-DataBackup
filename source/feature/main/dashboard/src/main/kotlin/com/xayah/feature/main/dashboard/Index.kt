@@ -183,18 +183,30 @@ fun PageDashboard() {
 //                        colorContainer = ThemedColorSchemeKeyTokens.GreenPrimaryContainer,
 //                        colorL80D20 = ThemedColorSchemeKeyTokens.GreenL80D20,
 //                        onColorContainer = ThemedColorSchemeKeyTokens.GreenOnPrimaryContainer
-//                    )
+                    //                    )
                     QuickActionsButton(
                         modifier = Modifier.weight(1f),
                         enabled = nullBackupDir.not(),
                         title = stringResource(id = R.string.cloud),
+                        icon = Icons.Outlined.Cloud,
+                        colorContainer = ThemedColorSchemeKeyTokens.BluePrimaryContainer,
+                        colorL80D20 = ThemedColorSchemeKeyTokens.BlueL80D20,
+                        onColorContainer = ThemedColorSchemeKeyTokens.BlueOnPrimaryContainer,
+                        actionIcon = Icons.Rounded.KeyboardArrowRight
+                    ) {
+                        navController.navigateSingle(MainRoutes.Cloud.route)
+                    }
+                    QuickActionsButton(
+                        modifier = Modifier.weight(1f),
+                        enabled = nullBackupDir.not(),
+                        title = stringResource(id = R.string.sync),
                         icon = Icons.Outlined.Cloud,
                         colorContainer = ThemedColorSchemeKeyTokens.PurplePrimaryContainer,
                         colorL80D20 = ThemedColorSchemeKeyTokens.PurpleL80D20,
                         onColorContainer = ThemedColorSchemeKeyTokens.PurpleOnPrimaryContainer,
                         actionIcon = Icons.Rounded.KeyboardArrowRight
                     ) {
-                        navController.navigateSingle(MainRoutes.Cloud.route)
+                        navController.navigateSingle(MainRoutes.Sync.route)
                     }
                     QuickActionsButton(
                         modifier = Modifier.weight(1f),
@@ -207,6 +219,18 @@ fun PageDashboard() {
                         actionIcon = Icons.Rounded.KeyboardArrowRight
                     ) {
                         navController.navigateSingle(MainRoutes.Restore.route)
+                    }
+                    QuickActionsButton(
+                        modifier = Modifier.weight(1f),
+                        enabled = nullBackupDir.not(),
+                        title = stringResource(id = R.string.restore_from_legacy),
+                        icon = ImageVector.vectorResource(id = R.drawable.ic_rounded_history),
+                        colorContainer = ThemedColorSchemeKeyTokens.GreenPrimaryContainer,
+                        colorL80D20 = ThemedColorSchemeKeyTokens.GreenL80D20,
+                        onColorContainer = ThemedColorSchemeKeyTokens.GreenOnPrimaryContainer,
+                        actionIcon = Icons.Rounded.KeyboardArrowRight
+                    ) {
+                        navController.navigateSingle(MainRoutes.LegacyBackups.route)
                     }
                     QuickActionsButton(
                         modifier = Modifier.weight(1f),

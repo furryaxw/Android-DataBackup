@@ -21,6 +21,8 @@ import javax.inject.Inject
 class TaskDetailsViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     taskRepo: TaskRepository,
+    private val backupRetryRepo: com.xayah.core.data.repository.BackupRetryRepository,
+    private val mediaRepo: com.xayah.core.data.repository.MediaRepository,
 ) : ViewModel() {
     private val id: Long = savedStateHandle.get<String>(MainRoutes.ARG_ID)?.toLongOrNull() ?: 0L
 
@@ -46,6 +48,19 @@ class TaskDetailsViewModel @Inject constructor(
         initialValue = TaskDetailsUiState.Loading,
         started = SharingStarted.WhileSubscribed(5_000),
     )
+
+    suspend fun retryFailedApps(): Int {
+        val state = uiState.value
+        if (state !is TaskDetailsUiState.Success) return 0
+        return backupRetryRepo.prepareFailedPackageRetry(state.appInfoList)
+    }
+
+    suspend fun retryFailedFiles(): Int {
+        val state = uiState.value
+        if (state !is TaskDetailsUiState.Success) return 0
+        val files = state.fileInfoList
+        return mediaRepo.reactivateFailedFromTask(files).size
+    }
 }
 
 sealed interface TaskDetailsUiState {

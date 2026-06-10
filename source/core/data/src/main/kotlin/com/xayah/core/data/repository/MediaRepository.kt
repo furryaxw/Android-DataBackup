@@ -40,6 +40,19 @@ class MediaRepository @Inject constructor(
 
     suspend fun clearBlocked() = mediaDao.clearBlocked()
     suspend fun setBlocked(id: Long, blocked: Boolean) = mediaDao.setBlocked(id, blocked)
+    suspend fun clearActivated(opType: OpType) = mediaDao.clearActivated(opType)
+
+    suspend fun reactivateFailedFromTask(failedItems: List<com.xayah.core.model.database.TaskDetailMediaEntity>): List<MediaEntity> {
+        val result = mutableListOf<MediaEntity>()
+        failedItems.filter { it.isSuccess.not() }.forEach { item ->
+            val media = mediaDao.query(name = item.mediaEntity.name, opType = OpType.BACKUP)
+            if (media != null) {
+                mediaDao.activateById(media.id, true)
+                result.add(media)
+            }
+        }
+        return result
+    }
     fun queryFlow(opType: OpType, blocked: Boolean) = mediaDao.queryFlow(opType, blocked).distinctUntilChanged()
     suspend fun query(opType: OpType, blocked: Boolean) = mediaDao.query(opType, blocked)
     suspend fun upsert(item: MediaEntity) = mediaDao.upsert(item)
@@ -47,12 +60,25 @@ class MediaRepository @Inject constructor(
     suspend fun delete(id: Long) = mediaDao.delete(id)
     suspend fun queryActivated(opType: OpType) = mediaDao.queryActivated(opType)
     suspend fun queryActivated(opType: OpType, cloud: String, backupDir: String) = mediaDao.queryActivated(opType, cloud, backupDir)
+    suspend fun queryActivated(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean) =
+        mediaDao.queryActivated(opType, cloud, backupDir, repositorySource)
+
     suspend fun query(opType: OpType, preserveId: Long, name: String, cloud: String, backupDir: String) = mediaDao.query(opType, preserveId, name, cloud, backupDir)
     suspend fun query(opType: OpType, preserveId: Long, name: String, ct: CompressionType, cloud: String, backupDir: String) = mediaDao.query(opType, preserveId, name, ct, cloud, backupDir)
     suspend fun query(opType: OpType, name: String, cloud: String, backupDir: String) = mediaDao.query(opType, name, cloud, backupDir)
     suspend fun query(opType: OpType, preserveId: Long, cloud: String, backupDir: String) = mediaDao.query(opType, preserveId, cloud, backupDir)
     suspend fun query(opType: OpType, cloud: String, backupDir: String) = mediaDao.query(opType, cloud, backupDir)
+    suspend fun query(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean) = mediaDao.query(opType, cloud, backupDir, repositorySource)
     suspend fun query(name: String, opType: OpType) = mediaDao.query(name, opType)
+
+    fun queryFilesFlow(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean) =
+        mediaDao.queryFilesFlow(opType, cloud, backupDir, repositorySource).distinctUntilChanged()
+
+    fun countFilesFlow(opType: OpType, existed: Boolean, blocked: Boolean, cloud: String, backupDir: String, repositorySource: Boolean) =
+        mediaDao.countFilesFlow(opType, existed, blocked, cloud, backupDir, repositorySource).distinctUntilChanged()
+
+    fun countActivatedFilesFlow(opType: OpType, existed: Boolean, blocked: Boolean, cloud: String, backupDir: String, repositorySource: Boolean) =
+        mediaDao.countActivatedFilesFlow(opType, existed, blocked, cloud, backupDir, repositorySource).distinctUntilChanged()
 
     fun getArchiveDst(dstDir: String, ct: CompressionType) = "${dstDir}/${DataType.MEDIA_MEDIA.type}.${ct.suffix}"
 

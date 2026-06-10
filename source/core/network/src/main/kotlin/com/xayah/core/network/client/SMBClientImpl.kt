@@ -42,6 +42,8 @@ import java.io.IOException
 
 
 class SMBClientImpl(private val entity: CloudEntity, private val extra: SMBExtra) : CloudClient {
+    override val entityName: String = entity.name
+
     private var client: SMBClient? = null
     private var session: Session? = null
     private var share: Share? = null
@@ -96,39 +98,36 @@ class SMBClientImpl(private val entity: CloudEntity, private val extra: SMBExtra
         val config = SmbConfig.builder()
             .withDialects(dialects)
             .build()
-        client = SMBClient(config).apply {
-            connect(entity.host, extra.port).also { connection ->
-                log { "Dialect: ${connection.connectionContext.negotiatedProtocol.dialect.name}" }
-                log { "Mode: ${extra.mode}" }
+        val smbClient = SMBClient(config)
+        client = smbClient
+        smbClient.connect(entity.host, extra.port).also { connection ->
+            log { "Dialect: ${connection.connectionContext.negotiatedProtocol.dialect.name}" }
+            log { "Mode: ${extra.mode}" }
 
-                val authentication = when (extra.mode) {
-                    SmbAuthMode.PASSWORD -> AuthenticationContext(entity.user, entity.pass.toCharArray(), extra.domain)
-                    SmbAuthMode.GUEST -> AuthenticationContext.guest()
-                    SmbAuthMode.ANONYMOUS -> AuthenticationContext.anonymous()
-                }
+            val authentication = when (extra.mode) {
+                SmbAuthMode.PASSWORD -> AuthenticationContext(entity.user, entity.pass.toCharArray(), extra.domain)
+                SmbAuthMode.GUEST -> AuthenticationContext.guest()
+                SmbAuthMode.ANONYMOUS -> AuthenticationContext.anonymous()
+            }
 
-                session = connection.authenticate(authentication)
-                if (extra.share.isNotEmpty()) setShare(extra.share)
-                withSession { _ ->
-                    val transport = SMBTransportFactories.SRVSVC.getTransport(session)
-                    val serverService = ServerService(transport)
-                    val shares = serverService.shares1
-                    availableShares = shares.filter { (it.type and STYPE_SPECIAL == STYPE_SPECIAL).not() }.map { it.netName }
-                }
+            session = connection.authenticate(authentication)
+            if (extra.share.isNotEmpty()) setShare(extra.share)
+            withSession { _ ->
+                val transport = SMBTransportFactories.SRVSVC.getTransport(session)
+                val serverService = ServerService(transport)
+                val shares = serverService.shares1
+                availableShares = shares.filter { (it.type and STYPE_SPECIAL == STYPE_SPECIAL).not() }.map { it.netName }
             }
         }
     }
 
     override fun disconnect() {
-        runCatching {
-            withDiskShare { diskShare ->
-                diskShare.close()
-            }
-            withClient { client ->
-                client.close()
-            }
-        }.withLog()
+        val diskShare = share as? DiskShare
+        val smbClient = client
+        runCatching { diskShare?.close() }.withLog()
+        runCatching { smbClient?.close() }.withLog()
         share = null
+        session = null
         client = null
     }
 
@@ -212,31 +211,41 @@ class SMBClientImpl(private val entity: CloudEntity, private val extra: SMBExtra
         log { "upload: $src to $dstPath" }
         deleteFile(dstPath)
         val dstFile = openFileOnWrite(dstPath)
-        val dstStream = dstFile.outputStream
         val srcFile = File(src)
         val srcFileSize = srcFile.length()
-        val srcInputStream = srcFile.inputStream()
-        val countingStream = CountingOutputStreamImpl(dstStream, srcFileSize, onUploading)
-        srcInputStream.copyTo(countingStream)
-        srcInputStream.close()
-        countingStream.close()
-        dstFile.close()
-        if (countingStream.byteCount == 0L) throw IOException("Failed to write remote file: 0 byte.")
-        onUploading(countingStream.byteCount, countingStream.byteCount)
+        var byteCount = 0L
+        try {
+            val dstStream = dstFile.outputStream
+            srcFile.inputStream().use { srcInputStream ->
+                CountingOutputStreamImpl(dstStream, srcFileSize, onUploading).use { countingStream ->
+                    srcInputStream.copyTo(countingStream)
+                    byteCount = countingStream.byteCount
+                }
+            }
+        } finally {
+            dstFile.close()
+        }
+        if (byteCount == 0L) throw IOException("Failed to write remote file: 0 byte.")
+        onUploading(byteCount, byteCount)
     }
 
     override fun download(src: String, dst: String, onDownloading: (written: Long, total: Long) -> Unit) = run {
         val name = PathUtil.getFileName(src)
         val dstPath = "$dst/$name"
         log { "download: $src to $dstPath" }
-        val dstOutputStream = File(dstPath).outputStream()
         val srcFile = openFileOnRead(src)
-        val countingStream = CountingOutputStreamImpl(dstOutputStream, -1) { written, total -> onDownloading(written, total) }
-        srcFile.read(countingStream)
-        srcFile.close()
-        dstOutputStream.close()
-        countingStream.close()
-        onDownloading(countingStream.byteCount, countingStream.byteCount)
+        var byteCount = 0L
+        try {
+            File(dstPath).outputStream().use { dstOutputStream ->
+                CountingOutputStreamImpl(dstOutputStream, -1) { written, total -> onDownloading(written, total) }.use { countingStream ->
+                    srcFile.read(countingStream)
+                    byteCount = countingStream.byteCount
+                }
+            }
+        } finally {
+            srcFile.close()
+        }
+        onDownloading(byteCount, byteCount)
     }
 
     override fun deleteFile(src: String) = withDiskShare { diskShare ->

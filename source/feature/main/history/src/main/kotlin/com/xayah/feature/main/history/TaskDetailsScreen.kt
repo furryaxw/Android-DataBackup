@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -36,11 +37,14 @@ import com.xayah.core.ui.component.InnerTopSpacer
 import com.xayah.core.ui.component.PackageIconImage
 import com.xayah.core.ui.component.SecondaryLargeTopBar
 import com.xayah.core.ui.component.Title
+import com.xayah.core.ui.route.MainRoutes
 import com.xayah.core.ui.token.AnimationTokens
 import com.xayah.core.ui.token.SizeTokens
 import com.xayah.core.ui.util.LocalNavController
 import com.xayah.core.ui.util.StateView
 import com.xayah.core.util.maybePopBackStack
+import com.xayah.core.util.navigateSingle
+import kotlinx.coroutines.launch
 
 @Composable
 fun TaskDetailsRoute(
@@ -48,7 +52,26 @@ fun TaskDetailsRoute(
 ) {
     val navController = LocalNavController.current!!
     val uiState: TaskDetailsUiState by viewModel.uiState.collectAsStateWithLifecycle()
-    TaskDetailsScreen(uiState)
+    val scope = rememberCoroutineScope()
+    TaskDetailsScreen(
+        uiState = uiState,
+        onRetryApps = {
+            scope.launch {
+                val count = viewModel.retryFailedApps()
+                if (count > 0) {
+                    navController.navigateSingle(MainRoutes.PackagesBackupProcessingGraph.route)
+                }
+            }
+        },
+        onRetryFiles = {
+            scope.launch {
+                val count = viewModel.retryFailedFiles()
+                if (count > 0) {
+                    navController.navigateSingle(MainRoutes.MediumBackupProcessingGraph.route)
+                }
+            }
+        },
+    )
     LaunchedEffect(uiState) {
         if (uiState is TaskDetailsUiState.Error) {
             navController.maybePopBackStack()
@@ -57,9 +80,13 @@ fun TaskDetailsRoute(
 }
 
 @SuppressLint("StringFormatInvalid")
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
-internal fun TaskDetailsScreen(uiState: TaskDetailsUiState) {
+internal fun TaskDetailsScreen(
+    uiState: TaskDetailsUiState,
+    onRetryApps: () -> Unit = {},
+    onRetryFiles: () -> Unit = {},
+) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -73,9 +100,33 @@ internal fun TaskDetailsScreen(uiState: TaskDetailsUiState) {
         AnimatedContent(uiState, label = AnimationTokens.AnimatedContentLabel) { state ->
             when (state) {
                 is TaskDetailsUiState.Success -> {
+                    val failedApps = state.appInfoList.filter { it.isSuccess.not() }
+                    val failedFiles = state.fileInfoList.filter { it.isSuccess.not() }
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
                         item {
                             InnerTopSpacer(innerPadding = innerPadding)
+                        }
+
+                        if (failedApps.isNotEmpty()) {
+                            item {
+                                Clickable(
+                                    title = stringResource(R.string.retry_failed_apps),
+                                    value = stringResource(R.string.args_failed_items, failedApps.size),
+                                ) {
+                                    onRetryApps()
+                                }
+                            }
+                        }
+
+                        if (failedFiles.isNotEmpty()) {
+                            item {
+                                Clickable(
+                                    title = stringResource(R.string.retry_failed_files),
+                                    value = stringResource(R.string.args_failed_items, failedFiles.size),
+                                ) {
+                                    onRetryFiles()
+                                }
+                            }
                         }
 
                         item {

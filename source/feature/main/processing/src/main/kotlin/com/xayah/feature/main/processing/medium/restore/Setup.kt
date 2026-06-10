@@ -52,8 +52,8 @@ fun PageMediumRestoreProcessingSetup(localNavController: NavHostController, view
 
     LaunchedEffect(null) {
         viewModel.launchOnIO {
-            viewModel.emitIntent(UpdateFiles)
             viewModel.emitIntent(SetCloudEntity(""))
+            viewModel.emitIntent(UpdateFiles)
         }
     }
 

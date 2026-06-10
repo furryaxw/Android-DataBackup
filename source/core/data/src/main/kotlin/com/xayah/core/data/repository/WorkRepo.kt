@@ -64,6 +64,7 @@ const val FAST_INIT_AND_UPDATE_APPS_WORK_NAME = "DbFastInitAndUpdateAppsWork"
 const val FAST_INIT_AND_UPDATE_FILES_WORK_NAME = "DbFastInitAndUpdateFilesWork"
 const val LOAD_APP_BACKUPS_WORK_NAME = "DbLoadAppBackupsWork"
 const val LOAD_FILE_BACKUPS_WORK_NAME = "DbLoadFileBackupsWork"
+const val CLOUD_UPLOAD_WORK_NAME = "CloudUploadWork"
 
 const val INPUT_DATA_KEY_REGULAR = "InputDataKeyRegular"
 const val INPUT_DATA_KEY_CLOUD_NAME = "InputDataKeyCloudName"

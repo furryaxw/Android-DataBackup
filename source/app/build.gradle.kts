@@ -62,7 +62,7 @@ android {
             dimension = "feature"
             applicationIdSuffix = ".alpha"
             versionCode = libs.versions.versionCodeAlpha.get().toInt()
-            versionName = libs.versions.versionCodeAlpha.get()
+            versionName = libs.versions.versionName.get()
         }
     }
 

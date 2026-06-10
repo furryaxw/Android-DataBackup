@@ -35,12 +35,19 @@ data class MediaExtraInfo(
 )
 
 @Serializable
+data class MediaSnapshotInfo(
+    @ColumnInfo(defaultValue = "0") var repositorySource: Boolean = false,
+    @ColumnInfo(defaultValue = "") var mediaSnapshotId: String = "",
+)
+
+@Serializable
 @Entity
 data class MediaEntity(
     @PrimaryKey(autoGenerate = true) var id: Long,
     @Embedded(prefix = "indexInfo_") var indexInfo: MediaIndexInfo,
     @Embedded(prefix = "mediaInfo_") var mediaInfo: MediaInfo,
     @Embedded(prefix = "extraInfo_") var extraInfo: MediaExtraInfo,
+    @Embedded(prefix = "snapshotInfo_") var snapshotInfo: MediaSnapshotInfo = MediaSnapshotInfo(),
 ) {
     private val ctName: String
         get() = indexInfo.compressionType.type
@@ -65,6 +72,9 @@ data class MediaEntity(
 
     val enabled: Boolean
         get() = extraInfo.existed && path.isNotEmpty()
+
+    val repositorySnapshotId: String
+        get() = snapshotInfo.mediaSnapshotId
 }
 
 fun MediaEntity.asExternalModel() = File(

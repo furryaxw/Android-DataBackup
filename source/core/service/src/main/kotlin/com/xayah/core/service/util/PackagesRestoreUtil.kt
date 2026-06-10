@@ -243,6 +243,72 @@ class PackagesRestoreUtil @Inject constructor(
         ShellResult(code = if (isSuccess) 0 else -1, input = listOf(), out = out)
     }
 
+    suspend fun restoreApksFromDirectory(userId: Int, p: PackageEntity, t: TaskDetailPackageEntity, srcDir: String): ShellResult = run {
+        log { "Restoring repository apk snapshot..." }
+
+        val dataType = DataType.PACKAGE_APK
+        val packageName = p.packageName
+        var isSuccess = true
+        val out = mutableListOf<String>()
+        val apksPath = rootService.walkFileTree(srcDir)
+            .map { it.pathString }
+            .filter { it.endsWith(".apk", ignoreCase = true) }
+
+        if (p.getDataSelected(dataType).not()) {
+            t.updateInfo(dataType = dataType, state = OperationState.SKIP)
+        } else {
+            t.updateInfo(dataType = dataType, state = OperationState.PROCESSING)
+            when (apksPath.size) {
+                0 -> {
+                    isSuccess = false
+                    out.add(log { "$srcDir has no apk files." })
+                }
+
+                1 -> {
+                    Pm.install(userId = userId, src = apksPath.first()).also { result ->
+                        isSuccess = isSuccess && result.isSuccess
+                        out.addAll(result.out)
+                    }
+                }
+
+                else -> {
+                    var pmSession = ""
+                    Pm.Install.create(userId = userId).also { result ->
+                        if (result.isSuccess) pmSession = result.outString
+                    }
+                    if (pmSession.isNotEmpty()) {
+                        out.add(log { "Install session: $pmSession." })
+                    } else {
+                        isSuccess = false
+                        out.add(log { "Failed to get install session." })
+                    }
+
+                    apksPath.forEach { apkPath ->
+                        Pm.Install.write(session = pmSession, srcName = PathUtil.getFileName(apkPath), src = apkPath).also { result ->
+                            isSuccess = isSuccess && result.isSuccess
+                            out.addAll(result.out)
+                        }
+                    }
+
+                    Pm.Install.commit(pmSession).also { result ->
+                        isSuccess = isSuccess && result.isSuccess
+                        out.addAll(result.out)
+                    }
+                }
+            }
+
+            rootService.queryInstalled(packageName = packageName, userId = userId).also {
+                if (it.not()) {
+                    isSuccess = false
+                    log { "Not installed: $packageName." }
+                }
+            }
+            t.updateInfo(dataType = dataType, state = if (isSuccess) OperationState.DONE else OperationState.ERROR, log = out.toLineString())
+        }
+
+        ShellResult(code = if (isSuccess) 0 else -1, input = listOf(), out = out)
+    }
+
     /**
      * Package data: USER, USER_DE, DATA, OBB, MEDIA
      */

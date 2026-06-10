@@ -9,6 +9,7 @@ import com.xayah.core.data.repository.ListData
 import com.xayah.core.data.repository.ListDataRepo
 import com.xayah.core.hiddenapi.castTo
 import com.xayah.core.model.OpType
+import com.xayah.core.model.RestoreSource
 import com.xayah.core.model.Target
 import com.xayah.core.model.util.of
 import com.xayah.core.ui.route.MainRoutes
@@ -38,10 +39,11 @@ class ListViewModel @Inject constructor(
     private val opType: OpType = OpType.of(savedStateHandle.get<String>(MainRoutes.ARG_OP_TYPE)?.decodeURL()?.trim())
     private val cloudName: String = savedStateHandle.get<String>(MainRoutes.ARG_ACCOUNT_NAME)?.decodeURL()?.trim() ?: ""
     private val backupDir: String = savedStateHandle.get<String>(MainRoutes.ARG_ACCOUNT_REMOTE)?.decodeURL()?.trim()?.ifEmpty { context.localBackupSaveDir() } ?: context.localBackupSaveDir()
+    private val restoreSource: RestoreSource = RestoreSource.of(savedStateHandle.get<String>(MainRoutes.ARG_RESTORE_SOURCE)?.decodeURL()?.trim())
 
     init {
         // Reset list data
-        listDataRepo.initialize(target, opType, cloudName, backupDir)
+        listDataRepo.initialize(target, opType, cloudName, backupDir, restoreSource)
     }
 
     val uiState: StateFlow<ListUiState> = when (target) {
@@ -118,7 +120,8 @@ class ListViewModel @Inject constructor(
                         navController.navigateSingle(
                             MainRoutes.PackagesRestoreProcessingGraph.getRoute(
                                 cloudName = cloudName.ifEmptyEncodeURLWithSpace(),
-                                backupDir = backupDir.ifEmptyEncodeURLWithSpace()
+                                backupDir = backupDir.ifEmptyEncodeURLWithSpace(),
+                                restoreSource = restoreSource,
                             )
                         )
                     }
@@ -135,7 +138,8 @@ class ListViewModel @Inject constructor(
                         navController.navigateSingle(
                             MainRoutes.MediumRestoreProcessingGraph.getRoute(
                                 cloudName = cloudName.ifEmptyEncodeURLWithSpace(),
-                                backupDir = backupDir.ifEmptyEncodeURLWithSpace()
+                                backupDir = backupDir.ifEmptyEncodeURLWithSpace(),
+                                restoreSource = restoreSource,
                             )
                         )
                     }

@@ -2,29 +2,30 @@ package com.xayah.feature.main.processing.medium.backup
 
 import android.content.Context
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.navigation.NavHostController
 import com.xayah.core.data.repository.CloudRepository
 import com.xayah.core.data.repository.MediaRepository
+import com.xayah.core.data.repository.RepositoryRuntimeRepository
 import com.xayah.core.data.repository.TaskRepository
+import com.xayah.core.datastore.readCloudActivatedAccountName
+import com.xayah.core.datastore.readCloudSyncStrategy
+import com.xayah.core.datastore.readDefaultSyncCloud
 import com.xayah.core.datastore.saveCloudActivatedAccountName
+import com.xayah.core.model.CloudSyncStrategy
 import com.xayah.core.model.OpType
-import com.xayah.core.model.StorageMode
+import com.xayah.core.model.database.CloudEntity
 import com.xayah.core.model.database.MediaEntity
 import com.xayah.core.model.util.formatSize
-import com.xayah.core.network.client.getCloud
 import com.xayah.core.rootservice.service.RemoteRootService
-import com.xayah.core.service.medium.backup.ProcessingServiceProxyCloudImpl
 import com.xayah.core.service.medium.backup.ProcessingServiceProxyLocalImpl
-import com.xayah.core.ui.material3.SnackbarDuration
-import com.xayah.core.ui.material3.SnackbarType
+import com.xayah.core.ui.component.DialogState
 import com.xayah.core.ui.model.DialogRadioItem
 import com.xayah.core.ui.route.MainRoutes
-import com.xayah.core.ui.viewmodel.IndexUiEffect
 import com.xayah.core.util.navigateSingle
 import com.xayah.feature.main.processing.AbstractMediumProcessingViewModel
 import com.xayah.feature.main.processing.FinishSetup
 import com.xayah.feature.main.processing.IndexUiState
 import com.xayah.feature.main.processing.ProcessingUiIntent
-import com.xayah.feature.main.processing.R
 import com.xayah.feature.main.processing.SetCloudEntity
 import com.xayah.feature.main.processing.UpdateFiles
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -33,6 +34,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
@@ -45,9 +47,19 @@ class BackupViewModelImpl @Inject constructor(
     mTaskRepo: TaskRepository,
     private val mMediaRepo: MediaRepository,
     private val mCloudRepo: CloudRepository,
+    private val mRepositoryRuntimeRepo: RepositoryRuntimeRepository,
     mLocalService: ProcessingServiceProxyLocalImpl,
-    mCloudService: ProcessingServiceProxyCloudImpl,
-) : AbstractMediumProcessingViewModel(mContext, mRootService, mTaskRepo, mLocalService, mCloudService) {
+) : AbstractMediumProcessingViewModel(mContext, mRootService, mTaskRepo, mLocalService, mLocalService) {
+    override val supportsPostBackupSync: Boolean = true
+
+    override suspend fun onProcessingDone(dialogState: DialogState, navController: NavHostController) {
+        maybeAutoPushRepository(navController)
+    }
+
+    override suspend fun onPostBackupSyncClick(navController: NavHostController) {
+        pushRepository(navController)
+    }
+
     override suspend fun onOtherEvent(state: IndexUiState, intent: ProcessingUiIntent) {
         when (intent) {
             is UpdateFiles -> {
@@ -66,35 +78,9 @@ class BackupViewModelImpl @Inject constructor(
             }
 
             is FinishSetup -> {
-                if (state.storageType == StorageMode.Cloud) {
-                    _isTesting.value = true
-                    emitEffect(IndexUiEffect.DismissSnackbar)
-                    emitEffectOnIO(
-                        IndexUiEffect.ShowSnackbar(
-                            type = SnackbarType.Loading,
-                            message = mCloudRepo.getString(R.string.processing),
-                            duration = SnackbarDuration.Indefinite,
-                        )
-                    )
-                    runCatching {
-                        val client = state.cloudEntity!!.getCloud()
-                        client.testConnection()
-                        emitEffect(IndexUiEffect.DismissSnackbar)
-                        withMainContext {
-                            intent.navController.popBackStack()
-                            intent.navController.navigateSingle(MainRoutes.MediumBackupProcessing.route)
-                        }
-                    }.onFailure {
-                        emitEffect(IndexUiEffect.DismissSnackbar)
-                        if (it.localizedMessage != null)
-                            emitEffectOnIO(IndexUiEffect.ShowSnackbar(type = SnackbarType.Error, message = it.localizedMessage!!, duration = SnackbarDuration.Long))
-                    }
-                    _isTesting.value = false
-                } else {
-                    withMainContext {
-                        intent.navController.popBackStack()
-                        intent.navController.navigateSingle(MainRoutes.MediumBackupProcessing.route)
-                    }
+                withMainContext {
+                    intent.navController.popBackStack()
+                    intent.navController.navigateSingle(MainRoutes.MediumBackupProcessing.route)
                 }
             }
 
@@ -121,4 +107,40 @@ class BackupViewModelImpl @Inject constructor(
     val isTesting: StateFlow<Boolean> = _isTesting.stateInScope(false)
     val medium: StateFlow<List<MediaEntity>> = _medium.stateInScope(listOf())
     val mediumSize: StateFlow<String> = _mediumSize.stateInScope("")
+
+    private suspend fun maybeAutoPushRepository(navController: NavHostController) {
+        val shouldPush = when (mContext.readCloudSyncStrategy().first()) {
+            CloudSyncStrategy.NEVER -> false
+            CloudSyncStrategy.ON_SUCCESS -> task.value?.failureCount == 0
+            CloudSyncStrategy.ALWAYS -> true
+        }
+        if (shouldPush) {
+            pushRepository(navController)
+        }
+    }
+
+    private suspend fun preferredSyncCloud(): CloudEntity? {
+        val clouds = mCloudRepo.query()
+        if (clouds.isEmpty()) return null
+        val selected = uiState.value.cloudEntity
+        val defaultName = mContext.readDefaultSyncCloud().first()
+        val activeName = mContext.readCloudActivatedAccountName().first()
+        return selected
+            ?: clouds.firstOrNull { it.name == defaultName }
+            ?: clouds.firstOrNull { it.name == activeName }
+            ?: clouds.first()
+    }
+
+    private suspend fun pushRepository(navController: NavHostController) {
+        val cloud = preferredSyncCloud()
+        mRepositoryRuntimeRepo.startPush(cloud?.name)
+        withMainContext {
+            navController.navigate(MainRoutes.Sync.route) {
+                popUpTo(MainRoutes.Dashboard.route) {
+                    inclusive = false
+                }
+                launchSingleTop = true
+            }
+        }
+    }
 }

@@ -2,10 +2,13 @@ package com.xayah.core.model.util
 
 import com.xayah.core.model.CompressionType
 import com.xayah.core.model.DataType
+import com.xayah.core.model.BackupCacheStrategy
+import com.xayah.core.model.CloudSyncStrategy
 import com.xayah.core.model.KillAppOption
 import com.xayah.core.model.LZ4_SUFFIX
 import com.xayah.core.model.OpType
 import com.xayah.core.model.OperationState
+import com.xayah.core.model.RestoreSource
 import com.xayah.core.model.SFTPAuthMode
 import com.xayah.core.model.SelectionType
 import com.xayah.core.model.SmbAuthMode
@@ -48,6 +51,9 @@ fun CompressionType.Companion.of(name: String?): CompressionType =
 fun OpType.Companion.of(name: String?): OpType =
     runCatching { OpType.valueOf(name!!.uppercase()) }.getOrDefault(OpType.BACKUP)
 
+fun RestoreSource.Companion.of(name: String?): RestoreSource =
+    runCatching { RestoreSource.valueOf(name!!.uppercase()) }.getOrDefault(RestoreSource.REPOSITORY)
+
 fun SortType.Companion.of(name: String?): SortType =
     runCatching { SortType.valueOf(name!!.uppercase()) }.getOrDefault(SortType.ASCENDING)
 
@@ -83,6 +89,24 @@ fun KillAppOption.Companion.indexOf(index: Int): KillAppOption = when (index) {
 
 fun KillAppOption.Companion.of(name: String?): KillAppOption =
     runCatching { KillAppOption.valueOf(name!!.uppercase()) }.getOrDefault(KillAppOption.OPTION_II)
+
+fun CloudSyncStrategy.Companion.indexOf(index: Int): CloudSyncStrategy = when (index) {
+    1 -> CloudSyncStrategy.ON_SUCCESS
+    2 -> CloudSyncStrategy.ALWAYS
+    else -> CloudSyncStrategy.NEVER
+}
+
+fun CloudSyncStrategy.Companion.of(name: String?): CloudSyncStrategy =
+    runCatching { CloudSyncStrategy.valueOf(name!!.uppercase()) }.getOrDefault(CloudSyncStrategy.NEVER)
+
+fun BackupCacheStrategy.Companion.indexOf(index: Int): BackupCacheStrategy = when (index) {
+    1 -> BackupCacheStrategy.DELETE_AFTER_SYNC
+    2 -> BackupCacheStrategy.DELETE_WHEN_LOW_SPACE
+    else -> BackupCacheStrategy.KEEP
+}
+
+fun BackupCacheStrategy.Companion.of(name: String?): BackupCacheStrategy =
+    runCatching { BackupCacheStrategy.valueOf(name!!.uppercase()) }.getOrDefault(BackupCacheStrategy.KEEP)
 
 fun Info.set(
     bytes: Long? = null,

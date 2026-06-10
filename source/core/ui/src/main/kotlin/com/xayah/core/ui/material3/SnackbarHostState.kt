@@ -110,6 +110,20 @@ class SnackbarHostState {
     ): SnackbarResult =
         showSnackbar(SnackbarVisualsImpl(message, type, actionLabel, withDismissAction, duration))
 
+    fun showSnackbarImmediately(
+        message: String,
+        type: SnackbarType? = null,
+        actionLabel: String? = null,
+        withDismissAction: Boolean = false,
+        duration: SnackbarDuration =
+            if (actionLabel == null) SnackbarDuration.Short else SnackbarDuration.Indefinite
+    ) {
+        currentSnackbarData?.dismiss()
+        currentSnackbarData = ImmediateSnackbarData(
+            SnackbarVisualsImpl(message, type, actionLabel, withDismissAction, duration)
+        )
+    }
+
     /**
      * Shows or queues to be shown a [Snackbar] at the bottom of the [Scaffold] to which this state
      * is attached and suspends until the snackbar has disappeared.
@@ -197,6 +211,20 @@ class SnackbarHostState {
             var result = visuals.hashCode()
             result = 31 * result + continuation.hashCode()
             return result
+        }
+    }
+
+    private inner class ImmediateSnackbarData(
+        override val visuals: SnackbarVisuals
+    ) : SnackbarData {
+        override fun performAction() {
+            dismiss()
+        }
+
+        override fun dismiss() {
+            if (currentSnackbarData === this) {
+                currentSnackbarData = null
+            }
         }
     }
 }

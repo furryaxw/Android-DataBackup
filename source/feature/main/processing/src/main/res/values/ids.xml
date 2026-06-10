@@ -80,8 +80,17 @@
     <item name="necessary_remaining_data_processing" type="string" />
     <item name="files" type="string" />
     <item name="visit_details" type="string" />
+    <item name="retry_failed_items" type="string" />
+    <item name="sync_to_cloud" type="string" />
     <item name="backup_configs" type="string" />
     <item name="backup_configs_desc" type="string" />
+    <item name="sync_this_backup_to_cloud" type="string" />
+    <item name="sync_once" type="string" />
+    <item name="always_sync_to_this_cloud" type="string" />
+    <item name="never_sync" type="string" />
+    <item name="do_not_sync" type="string" />
+    <item name="remember" type="string" />
+    <item name="succeed" type="string" />
 
     <item name="backup_sort_type_items_apps" type="array" />
     <item name="flag_type_items" type="array" />

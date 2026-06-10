@@ -141,4 +141,10 @@ class MediumBackupUtil @Inject constructor(
             t.updateInfo(state = if (isSuccess) OperationState.DONE else OperationState.ERROR, log = t.getLog() + "\n${outString}", content = "100%")
         }
     }
+
+    suspend fun enqueueUpload(cloud: String, m: MediaEntity, srcDir: String, dstDir: String) {
+        val ct = m.indexInfo.compressionType
+        val src = mediaRepository.getArchiveDst(dstDir = srcDir, ct = ct)
+        cloudRepository.enqueueUpload(cloud = cloud, src = src, dstDir = dstDir)
+    }
 }

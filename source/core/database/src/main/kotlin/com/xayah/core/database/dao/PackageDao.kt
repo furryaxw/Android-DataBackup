@@ -77,11 +77,27 @@ interface PackageDao {
     )
     suspend fun query(packageName: String, opType: OpType, userId: Int, preserveId: Long, ct: CompressionType, cloud: String, backupDir: String): PackageEntity?
 
+    @Query(
+        "SELECT * FROM PackageEntity WHERE" +
+                " indexInfo_packageName = :packageName AND indexInfo_opType = :opType AND indexInfo_userId = :userId AND indexInfo_preserveId = :preserveId AND indexInfo_compressionType = :ct" +
+                " AND indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir" +
+                " AND snapshotInfo_repositorySource = :repositorySource" +
+                " LIMIT 1"
+    )
+    suspend fun query(packageName: String, opType: OpType, userId: Int, preserveId: Long, ct: CompressionType, cloud: String, backupDir: String, repositorySource: Boolean): PackageEntity?
+
     @Query("SELECT * FROM PackageEntity WHERE extraInfo_activated = 1 AND indexInfo_opType = :opType")
     suspend fun queryActivated(opType: OpType): List<PackageEntity>
 
     @Query("SELECT * FROM PackageEntity WHERE extraInfo_activated = 1 AND indexInfo_opType = :opType AND indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir")
     suspend fun queryActivated(opType: OpType, cloud: String, backupDir: String): List<PackageEntity>
+
+    @Query(
+        "SELECT * FROM PackageEntity WHERE" +
+                " extraInfo_activated = 1 AND indexInfo_opType = :opType AND indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir" +
+                " AND snapshotInfo_repositorySource = :repositorySource"
+    )
+    suspend fun queryActivated(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean): List<PackageEntity>
 
     @Query("UPDATE PackageEntity SET extraInfo_activated = 0 WHERE indexInfo_opType = :opType")
     suspend fun clearActivated(opType: OpType)
@@ -160,6 +176,16 @@ interface PackageDao {
             Flow<Map<@MapColumn(columnName = "indexInfo_userId") Int, @MapColumn(columnName = "iCount") Long>>
 
     @Query(
+        "SELECT indexInfo_userId, COUNT(*) as iCount FROM PackageEntity WHERE" +
+                " indexInfo_opType = :opType AND extraInfo_blocked = :blocked AND" +
+                " indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir AND" +
+                " snapshotInfo_repositorySource = :repositorySource AND" +
+                " extraInfo_activated = 1 GROUP BY indexInfo_userId"
+    )
+    fun countUsersMapFlow(opType: OpType, blocked: Boolean, cloud: String, backupDir: String, repositorySource: Boolean):
+            Flow<Map<@MapColumn(columnName = "indexInfo_userId") Int, @MapColumn(columnName = "iCount") Long>>
+
+    @Query(
         "SELECT * FROM PackageEntity WHERE id = :id"
     )
     fun queryPackageFlow(id: Long): Flow<PackageEntity?>
@@ -184,9 +210,22 @@ interface PackageDao {
 
     @Query(
         "SELECT * FROM PackageEntity WHERE" +
+                " indexInfo_opType = :opType AND snapshotInfo_repositorySource = :repositorySource"
+    )
+    fun queryPackagesFlowBySource(opType: OpType, repositorySource: Boolean): Flow<List<PackageEntity>>
+
+    @Query(
+        "SELECT * FROM PackageEntity WHERE" +
                 " indexInfo_opType = :opType AND indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir"
     )
     fun queryPackagesFlow(opType: OpType, cloud: String, backupDir: String): Flow<List<PackageEntity>>
+
+    @Query(
+        "SELECT * FROM PackageEntity WHERE" +
+                " indexInfo_opType = :opType AND indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir" +
+                " AND snapshotInfo_repositorySource = :repositorySource"
+    )
+    fun queryPackagesFlow(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean): Flow<List<PackageEntity>>
 
     @Query(
         "SELECT DISTINCT indexInfo_userId FROM PackageEntity WHERE" +
@@ -201,10 +240,47 @@ interface PackageDao {
     fun queryUserIdsFlow(opType: OpType): Flow<List<Int>>
 
     @Query(
+        "SELECT DISTINCT indexInfo_userId FROM PackageEntity WHERE" +
+                " indexInfo_opType = :opType AND indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir" +
+                " AND snapshotInfo_repositorySource = :repositorySource"
+    )
+    suspend fun queryUserIds(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean): List<Int>
+
+    @Query(
+        "SELECT DISTINCT indexInfo_userId FROM PackageEntity WHERE" +
+                " indexInfo_opType = :opType AND indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir" +
+                " AND snapshotInfo_repositorySource = :repositorySource"
+    )
+    fun queryUserIdsFlow(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean): Flow<List<Int>>
+
+    @Query(
         "SELECT * FROM PackageEntity WHERE" +
                 " indexInfo_opType = :opType AND indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir"
     )
     suspend fun queryPackages(opType: OpType, cloud: String, backupDir: String): List<PackageEntity>
+
+    @Query(
+        "SELECT * FROM PackageEntity WHERE" +
+                " indexInfo_opType = :opType AND indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir" +
+                " AND snapshotInfo_repositorySource = :repositorySource"
+    )
+    suspend fun queryPackages(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean): List<PackageEntity>
+
+    @Query(
+        "SELECT COUNT(*) FROM PackageEntity WHERE" +
+                " indexInfo_opType = :opType AND extraInfo_blocked = :blocked AND" +
+                " indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir AND" +
+                " snapshotInfo_repositorySource = :repositorySource"
+    )
+    fun countPackagesFlow(opType: OpType, blocked: Boolean, cloud: String, backupDir: String, repositorySource: Boolean): Flow<Long>
+
+    @Query(
+        "SELECT COUNT(*) FROM PackageEntity WHERE" +
+                " indexInfo_opType = :opType AND extraInfo_blocked = :blocked AND extraInfo_activated = 1 AND" +
+                " indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir AND" +
+                " snapshotInfo_repositorySource = :repositorySource"
+    )
+    fun countActivatedPackagesFlow(opType: OpType, blocked: Boolean, cloud: String, backupDir: String, repositorySource: Boolean): Flow<Long>
 
     @Query(
         "UPDATE PackageEntity" +

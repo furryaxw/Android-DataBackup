@@ -32,6 +32,8 @@ import java.io.IOException
 
 
 class SFTPClientImpl(private val entity: CloudEntity, private val extra: SFTPExtra) : CloudClient {
+    override val entityName: String = entity.name
+
     private var sshClient: SSHClient? = null
     private var sftpClient: SFTPClient? = null
 
@@ -51,7 +53,9 @@ class SFTPClientImpl(private val entity: CloudEntity, private val extra: SFTPExt
     }
 
     override fun connect() {
-        sshClient = SSHClient().apply {
+        val ssh = SSHClient()
+        sshClient = ssh
+        ssh.apply {
             addHostKeyVerifier(PromiscuousVerifier())
             connect(entity.host, extra.port)
 
@@ -85,7 +89,8 @@ class SFTPClientImpl(private val entity: CloudEntity, private val extra: SFTPExt
     }
 
     override fun disconnect() {
-        withSSHClient { it.disconnect() }
+        runCatching { sftpClient?.close() }
+        runCatching { sshClient?.disconnect() }
         sshClient = null
         sftpClient = null
     }
@@ -109,21 +114,39 @@ class SFTPClientImpl(private val entity: CloudEntity, private val extra: SFTPExt
     }
 
     override fun upload(src: String, dst: String, onUploading: (read: Long, total: Long) -> Unit) {
+        uploadResume(src, dst, 0L, onUploading)
+    }
+
+    override fun uploadResume(src: String, dst: String, resumeOffset: Long, onUploading: (read: Long, total: Long) -> Unit) {
         val name = PathUtil.getFileName(src)
         val dstPath = "$dst/$name"
-        log { "upload: $src to $dstPath" }
-        val dstFile = openFile(dstPath)
-        val dstStream = dstFile.RemoteFileOutputStream()
+        log { "uploadResume: $src to $dstPath, offset: $resumeOffset" }
+        val dstFile = withSFTPClient { it.open(dstPath, setOf(OpenMode.READ, OpenMode.WRITE, OpenMode.CREAT)) }
         val srcFile = File(src)
         val srcFileSize = srcFile.length()
-        val srcInputStream = srcFile.inputStream()
-        val countingStream = CountingOutputStreamImpl(dstStream, srcFileSize, onUploading)
-        srcInputStream.copyTo(countingStream)
-        srcInputStream.close()
-        countingStream.close()
-        dstFile.close()
-        if (countingStream.byteCount == 0L) throw IOException("Failed to write remote file: 0 byte.")
-        onUploading(countingStream.byteCount, countingStream.byteCount)
+        val bytesToSend = srcFileSize - resumeOffset
+        if (bytesToSend <= 0) {
+            onUploading(srcFileSize, srcFileSize)
+            dstFile.close()
+            return
+        }
+        var byteCount = 0L
+        try {
+            val dstStream = dstFile.RemoteFileOutputStream(resumeOffset)
+            srcFile.inputStream().use { srcInputStream ->
+                srcInputStream.skip(resumeOffset)
+                CountingOutputStreamImpl(dstStream, bytesToSend) { read, _ ->
+                    onUploading(resumeOffset + read, srcFileSize)
+                }.use { countingStream ->
+                    srcInputStream.copyTo(countingStream)
+                    byteCount = countingStream.byteCount
+                }
+            }
+        } finally {
+            dstFile.close()
+        }
+        if (byteCount == 0L) throw IOException("Failed to write remote file: 0 byte.")
+        onUploading(srcFileSize, srcFileSize)
     }
 
     override fun download(src: String, dst: String, onDownloading: (written: Long, total: Long) -> Unit) {
@@ -131,14 +154,19 @@ class SFTPClientImpl(private val entity: CloudEntity, private val extra: SFTPExt
         val dstPath = "${dst}/$name"
         log { "download: $src to $dstPath" }
         val dstFile = File(dstPath)
-        val dstStream = FileOutputStream(dstFile)
         val srcFile = openFile(src)
-        val srcFileSize = srcFile.length()
-        val srcFileStream = srcFile.RemoteFileInputStream()
-        val countingStream = CountingOutputStreamImpl(dstStream, srcFileSize, onDownloading)
-        srcFileStream.copyTo(countingStream)
-        srcFileStream.close()
-        dstStream.close()
+        try {
+            val srcFileSize = srcFile.length()
+            FileOutputStream(dstFile).use { dstStream ->
+                srcFile.RemoteFileInputStream().use { srcFileStream ->
+                    CountingOutputStreamImpl(dstStream, srcFileSize, onDownloading).use { countingStream ->
+                        srcFileStream.copyTo(countingStream)
+                    }
+                }
+            }
+        } finally {
+            srcFile.close()
+        }
     }
 
     override fun deleteFile(src: String) {

@@ -57,13 +57,63 @@ class PackageRepository @Inject constructor(
 
     suspend fun getPackage(packageName: String, opType: OpType, userId: Int) = packageDao.query(packageName, opType, userId)
     fun queryPackagesFlow(opType: OpType, blocked: Boolean) = packageDao.queryPackagesFlow(opType, blocked).distinctUntilChanged()
+    fun queryPackagesFlow(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean) =
+        packageDao.queryPackagesFlow(opType, cloud, backupDir, repositorySource).distinctUntilChanged()
     suspend fun queryPackages(opType: OpType, blocked: Boolean) = packageDao.queryPackages(opType, blocked)
+    suspend fun queryPackage(
+        packageName: String,
+        opType: OpType,
+        userId: Int,
+        preserveId: Long,
+        compressionType: CompressionType,
+        cloud: String,
+        backupDir: String,
+        repositorySource: Boolean,
+    ) = packageDao.query(packageName, opType, userId, preserveId, compressionType, cloud, backupDir, repositorySource)
     suspend fun queryUserIds(opType: OpType) = packageDao.queryUserIds(opType)
+    suspend fun queryUserIds(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean) =
+        packageDao.queryUserIds(opType, cloud, backupDir, repositorySource)
+
+    fun queryUserIdsFlow(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean) =
+        packageDao.queryUserIdsFlow(opType, cloud, backupDir, repositorySource).distinctUntilChanged()
+
     suspend fun queryPackages(opType: OpType, cloud: String, backupDir: String) = packageDao.queryPackages(opType, cloud, backupDir)
+    suspend fun queryPackages(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean) =
+        packageDao.queryPackages(opType, cloud, backupDir, repositorySource)
+
     suspend fun queryActivated(opType: OpType) = packageDao.queryActivated(opType)
     suspend fun queryActivated(opType: OpType, cloud: String, backupDir: String) = packageDao.queryActivated(opType, cloud, backupDir)
+    suspend fun queryActivated(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean) =
+        packageDao.queryActivated(opType, cloud, backupDir, repositorySource)
+
+    fun countPackagesFlow(opType: OpType, blocked: Boolean, cloud: String, backupDir: String, repositorySource: Boolean) =
+        packageDao.countPackagesFlow(opType, blocked, cloud, backupDir, repositorySource).distinctUntilChanged()
+
+    fun countActivatedPackagesFlow(opType: OpType, blocked: Boolean, cloud: String, backupDir: String, repositorySource: Boolean) =
+        packageDao.countActivatedPackagesFlow(opType, blocked, cloud, backupDir, repositorySource).distinctUntilChanged()
+
+    fun countUsersMapFlow(opType: OpType, blocked: Boolean, cloud: String, backupDir: String, repositorySource: Boolean) =
+        packageDao.countUsersMapFlow(opType, blocked, cloud, backupDir, repositorySource).distinctUntilChanged()
     suspend fun setBlocked(id: Long, blocked: Boolean) = packageDao.setBlocked(id, blocked)
     suspend fun clearBlocked() = packageDao.clearBlocked()
+    suspend fun clearActivated(opType: OpType) = packageDao.clearActivated(opType)
+
+    suspend fun reactivateFailedFromTask(failedItems: List<com.xayah.core.model.database.TaskDetailPackageEntity>): List<PackageEntity> {
+        val result = mutableListOf<PackageEntity>()
+        failedItems.filter { it.isSuccess.not() }.forEach { item ->
+            val pkg = packageDao.query(
+                packageName = item.packageEntity.packageName,
+                opType = OpType.BACKUP,
+                userId = item.packageEntity.userId,
+            )
+            if (pkg != null) {
+                packageDao.activateById(pkg.id, true)
+                result.add(pkg)
+            }
+        }
+        return result
+    }
+
     private val localBackupSaveDir get() = context.localBackupSaveDir()
 
     fun getArchiveDst(dstDir: String, dataType: DataType, ct: CompressionType) = "${dstDir}/${dataType.type}.${ct.suffix}"

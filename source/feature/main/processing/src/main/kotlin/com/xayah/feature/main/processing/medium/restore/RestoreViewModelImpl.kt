@@ -7,8 +7,11 @@ import com.xayah.core.data.repository.CloudRepository
 import com.xayah.core.data.repository.MediaRepository
 import com.xayah.core.data.repository.TaskRepository
 import com.xayah.core.model.OpType
+import com.xayah.core.model.RESTORE_SOURCE_ARG
+import com.xayah.core.model.RestoreSource
 import com.xayah.core.model.StorageMode
 import com.xayah.core.model.database.MediaEntity
+import com.xayah.core.model.util.of
 import com.xayah.core.model.util.formatSize
 import com.xayah.core.network.client.getCloud
 import com.xayah.core.rootservice.service.RemoteRootService
@@ -52,19 +55,19 @@ class RestoreViewModelImpl @Inject constructor(
     mCloudService: ProcessingServiceProxyCloudImpl,
     private val args: SavedStateHandle,
 ) : AbstractMediumProcessingViewModel(mContext, mRootService, mTaskRepo, mLocalService, mCloudService) {
+    private val restoreSource: RestoreSource = RestoreSource.of(args.get<String>(MainRoutes.ARG_RESTORE_SOURCE)?.decodeURL()?.trim())
+
+    init {
+        mLocalService.putExtra(RESTORE_SOURCE_ARG, restoreSource.name)
+        mCloudService.putExtra(RESTORE_SOURCE_ARG, restoreSource.name)
+    }
+
     override suspend fun onOtherEvent(state: IndexUiState, intent: ProcessingUiIntent) {
         when (intent) {
             is UpdateFiles -> {
-                val cloud: String
-                val backupSaveDir: String
-                if (uiState.value.cloudEntity == null) {
-                    cloud = ""
-                    backupSaveDir = mContext.localBackupSaveDir()
-                } else {
-                    cloud = uiState.value.cloudEntity!!.name
-                    backupSaveDir = uiState.value.cloudEntity!!.remote
-                }
-                val medium = mMediaRepo.queryActivated(OpType.RESTORE, cloud, backupSaveDir)
+                val cloud = ""
+                val backupSaveDir = mContext.localBackupSaveDir()
+                val medium = mMediaRepo.queryActivated(OpType.RESTORE, cloud, backupSaveDir, repositorySource = restoreSource == RestoreSource.REPOSITORY)
                 LogUtil.log { "RestoreViewModelImpl.UpdateApps" to "Query activated files, cloud: $cloud, backupDir: $backupSaveDir" }
                 LogUtil.log { "RestoreViewModelImpl.UpdateApps" to "Queried files count: ${medium.size}" }
                 var bytes = 0.0
@@ -76,44 +79,13 @@ class RestoreViewModelImpl @Inject constructor(
             }
 
             is SetCloudEntity -> {
-                val name = args.get<String>(MainRoutes.ARG_ACCOUNT_NAME)?.decodeURL()?.trim() ?: ""
-                if (name.isNotEmpty()) {
-                    emitState(state.copy(storageIndex = 1, storageType = StorageMode.Cloud, cloudEntity = mCloudRepo.queryByName(name)))
-                } else {
-                    emitState(state.copy(storageIndex = 0, storageType = StorageMode.Local, cloudEntity = null))
-                }
+                emitState(state.copy(storageIndex = 0, storageType = StorageMode.Local, cloudEntity = null))
             }
 
             is FinishSetup -> {
-                if (state.storageType == StorageMode.Cloud) {
-                    _isTesting.value = true
-                    emitEffect(IndexUiEffect.DismissSnackbar)
-                    emitEffectOnIO(
-                        IndexUiEffect.ShowSnackbar(
-                            type = SnackbarType.Loading,
-                            message = mCloudRepo.getString(R.string.processing),
-                            duration = SnackbarDuration.Indefinite,
-                        )
-                    )
-                    runCatching {
-                        val client = state.cloudEntity!!.getCloud()
-                        client.testConnection()
-                        emitEffect(IndexUiEffect.DismissSnackbar)
-                        withMainContext {
-                            intent.navController.popBackStack()
-                            intent.navController.navigateSingle(MainRoutes.MediumRestoreProcessing.route)
-                        }
-                    }.onFailure {
-                        emitEffect(IndexUiEffect.DismissSnackbar)
-                        if (it.localizedMessage != null)
-                            emitEffectOnIO(IndexUiEffect.ShowSnackbar(type = SnackbarType.Error, message = it.localizedMessage!!, duration = SnackbarDuration.Long))
-                    }
-                    _isTesting.value = false
-                } else {
-                    withMainContext {
-                        intent.navController.popBackStack()
-                        intent.navController.navigateSingle(MainRoutes.MediumRestoreProcessing.route)
-                    }
+                withMainContext {
+                    intent.navController.popBackStack()
+                    intent.navController.navigateSingle(MainRoutes.MediumRestoreProcessing.route)
                 }
             }
 

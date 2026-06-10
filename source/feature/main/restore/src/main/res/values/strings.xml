@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="legacy_backups">Legacy backups</string>
+    <string name="import_to_repository">Import to repository</string>
+    <string name="args_legacy_reloaded">Reloaded %1$d apps and %2$d files</string>
+    <string name="args_legacy_imported">Imported %1$d app snapshots and %2$d file snapshots</string>
+    <string name="loading_backups">Loading backups</string>
+    <string name="processing">Processing</string>
+    <string name="overlook">Overview</string>
+    <string name="directory_structure">Directory structure</string>
+    <string name="existing_files">Existing files</string>
+    <string name="not_exist">Does not exist</string>
+</resources>

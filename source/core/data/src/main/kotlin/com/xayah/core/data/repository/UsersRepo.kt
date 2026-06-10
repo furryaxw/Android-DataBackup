@@ -22,15 +22,18 @@ class UsersRepo @Inject constructor(
     private val rootService: RemoteRootService,
     private val appsDao: PackageDao,
 ) {
-    fun getUsers(opType: OpType): Flow<List<UserInfo>> = when (opType) {
+    fun getUsers(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean): Flow<List<UserInfo>> = when (opType) {
         OpType.BACKUP -> flow {
             emit(
                 rootService.getUsers().map { UserInfo(it.id, it.name) }
             )
         }.flowOn(defaultDispatcher)
 
-        OpType.RESTORE -> appsDao.queryUserIdsFlow(opType).map { it.map { u -> UserInfo(u, context.getString(R.string.user)) } }
+        OpType.RESTORE -> appsDao.queryUserIdsFlow(opType, cloud, backupDir, repositorySource).map { it.map { u -> UserInfo(u, context.getString(R.string.user)) } }
     }
 
-    fun getUsersMap(opType: OpType, cloud: String, backupDir: String): Flow<Map<Int, Long>> = appsDao.countUsersMapFlow(opType = opType, blocked = false, cloud = cloud, backupDir = backupDir)
+    fun getUsersMap(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean): Flow<Map<Int, Long>> = when (opType) {
+        OpType.BACKUP -> appsDao.countUsersMapFlow(opType = opType, blocked = false, cloud = cloud, backupDir = backupDir)
+        OpType.RESTORE -> appsDao.countUsersMapFlow(opType = opType, blocked = false, cloud = cloud, backupDir = backupDir, repositorySource = repositorySource)
+    }
 }

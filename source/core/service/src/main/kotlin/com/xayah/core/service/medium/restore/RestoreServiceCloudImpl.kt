@@ -1,5 +1,6 @@
 package com.xayah.core.service.medium.restore
 
+import com.xayah.core.data.repository.BackupEngineRepository
 import com.xayah.core.data.repository.CloudRepository
 import com.xayah.core.data.repository.MediaRepository
 import com.xayah.core.data.repository.TaskRepository
@@ -62,7 +63,7 @@ internal class RestoreServiceCloudImpl @Inject constructor() : AbstractRestoreSe
         mRemoteFilesDir = mPathUtil.getCloudRemoteFilesDir(mRemotePath)
         mTaskEntity.update(cloud = mCloudEntity.name, backupDir = mRemotePath)
 
-        return mMediaRepo.queryActivated(OpType.RESTORE, mCloudEntity.name, mCloudEntity.remote)
+        return mMediaRepo.queryActivated(OpType.RESTORE, mCloudEntity.name, mCloudEntity.remote, repositorySource = mRepositorySource)
     }
 
     private fun getRemoteFileDir(archivesRelativeDir: String) = "${mRemoteFilesDir}/${archivesRelativeDir}"
@@ -90,6 +91,9 @@ internal class RestoreServiceCloudImpl @Inject constructor() : AbstractRestoreSe
 
     @Inject
     override lateinit var mMediumRestoreUtil: MediumRestoreUtil
+
+    @Inject
+    override lateinit var mBackupEngineRepo: BackupEngineRepository
 
     override val mRootDir by lazy { mPathUtil.getCloudTmpDir() }
     override val mFilesDir by lazy { mPathUtil.getCloudTmpFilesDir() }

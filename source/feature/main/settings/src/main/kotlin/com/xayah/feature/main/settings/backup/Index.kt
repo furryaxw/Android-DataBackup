@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
@@ -25,19 +26,27 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xayah.core.datastore.KeyBackupConfigs
 import com.xayah.core.datastore.KeyBackupItself
 import com.xayah.core.datastore.KeyCheckKeystore
-import com.xayah.core.datastore.KeyCompressionTest
 import com.xayah.core.datastore.KeyFollowSymlinks
-import com.xayah.core.datastore.readCompressionLevel
+import com.xayah.core.datastore.readCloudSyncStrategy
+import com.xayah.core.datastore.readCloudUploadRetries
+import com.xayah.core.datastore.readDefaultSyncCloud
 import com.xayah.core.datastore.readKillAppOption
-import com.xayah.core.datastore.saveCompressionLevel
+import com.xayah.core.datastore.readSyncConcurrency
+import com.xayah.core.datastore.saveCloudSyncStrategy
+import com.xayah.core.datastore.saveDefaultSyncCloud
+import com.xayah.core.datastore.saveCloudUploadRetries
 import com.xayah.core.datastore.saveKillAppOption
+import com.xayah.core.datastore.saveSyncConcurrency
+import com.xayah.core.model.CloudSyncStrategy
 import com.xayah.core.model.KillAppOption
 import com.xayah.core.model.util.indexOf
+import com.xayah.core.ui.component.Clickable
 import com.xayah.core.ui.component.InnerBottomSpacer
 import com.xayah.core.ui.component.LocalSlotScope
 import com.xayah.core.ui.component.Selectable
 import com.xayah.core.ui.component.Slideable
 import com.xayah.core.ui.component.Switchable
+import com.xayah.core.ui.component.Title
 import com.xayah.core.ui.component.select
 import com.xayah.core.ui.model.DialogRadioItem
 import com.xayah.core.ui.token.SizeTokens
@@ -52,12 +61,15 @@ import kotlin.math.roundToInt
 @ExperimentalMaterial3Api
 @Composable
 fun PageBackupSettings() {
+    val viewModel = hiltViewModel<BackupSettingsViewModel>()
+    val accounts by viewModel.accounts.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val dialogState = LocalSlotScope.current!!.dialogSlot
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
     SettingsScaffold(
         scrollBehavior = scrollBehavior,
+        snackbarHostState = viewModel.snackbarHostState,
         title = stringResource(id = R.string.backup_settings),
         actions = {}
     ) {
@@ -69,19 +81,80 @@ fun PageBackupSettings() {
         ) {
             Column {
                 val scope = rememberCoroutineScope()
-                val level by context.readCompressionLevel().collectAsStateWithLifecycle(initialValue = 1)
-                Slideable(
-                    title = stringResource(id = R.string.compression_level),
-                    value = level.toFloat(),
-                    valueRange = 1F..22F,
-                    steps = 20,
-                    desc = remember(level) { "${context.getString(R.string.args_current_level, level)}\n${context.getString(R.string.compression_level_desc)}" }
+                val cloudSyncItems = stringArrayResource(id = R.array.cloud_sync_strategy_options)
+                val cloudSyncDialogItems by remember(cloudSyncItems) {
+                    mutableStateOf(cloudSyncItems.mapIndexed { index, s ->
+                        DialogRadioItem(enum = CloudSyncStrategy.indexOf(index), title = s, desc = null)
+                    })
+                }
+                val cloudSyncStrategy by context.readCloudSyncStrategy().collectAsStateWithLifecycle(initialValue = CloudSyncStrategy.NEVER)
+                val cloudSyncStrategyIndex by remember(cloudSyncStrategy) { mutableIntStateOf(cloudSyncStrategy.ordinal) }
+                Selectable(
+                    title = stringResource(id = R.string.cloud_sync_strategy),
+                    value = stringResource(id = R.string.cloud_sync_strategy_desc),
+                    current = cloudSyncItems[cloudSyncStrategyIndex]
                 ) {
-                    scope.launch {
-                        context.saveCompressionLevel(it.roundToInt())
+                    val (state, selectedIndex) = dialogState.select(
+                        title = context.getString(R.string.cloud_sync_strategy),
+                        defIndex = cloudSyncStrategyIndex,
+                        items = cloudSyncDialogItems
+                    )
+                    if (state.isConfirm) {
+                        val selected = cloudSyncDialogItems[selectedIndex].enum!!
+                        context.saveCloudSyncStrategy(selected)
                     }
                 }
 
+                val defaultCloudName by context.readDefaultSyncCloud().collectAsStateWithLifecycle(initialValue = "")
+                Selectable(
+                    enabled = accounts.isNotEmpty(),
+                    title = stringResource(id = R.string.default_sync_cloud),
+                    value = stringResource(id = R.string.default_sync_cloud_desc),
+                    current = defaultCloudName.ifEmpty { stringResource(id = R.string.not_selected) }
+                ) {
+                    val items = accounts.map { cloud ->
+                        DialogRadioItem(enum = Any(), title = cloud.name, desc = cloud.user)
+                    }
+                    val defaultIndex = accounts.indexOfFirst { it.name == defaultCloudName }.coerceAtLeast(0)
+                    val (state, selectedIndex) = dialogState.select(
+                        title = context.getString(R.string.default_sync_cloud),
+                        defIndex = defaultIndex,
+                        items = items,
+                    )
+                    if (state.isConfirm) {
+                        context.saveDefaultSyncCloud(accounts[selectedIndex].name)
+                    }
+                }
+
+                val uploadRetries by context.readCloudUploadRetries().collectAsStateWithLifecycle(initialValue = 3)
+                Slideable(
+                    title = stringResource(id = R.string.cloud_upload_retries),
+                    value = uploadRetries.toFloat(),
+                    valueRange = 1F..10F,
+                    steps = 8,
+                    desc = stringResource(id = R.string.args_current_retries, uploadRetries),
+                ) {
+                    scope.launch {
+                        context.saveCloudUploadRetries(it.roundToInt())
+                    }
+                }
+
+                val syncConcurrency by context.readSyncConcurrency().collectAsStateWithLifecycle(initialValue = 4)
+                val boundedSyncConcurrency = syncConcurrency.coerceIn(1, 16)
+                Slideable(
+                    title = stringResource(id = R.string.sync_concurrency),
+                    value = boundedSyncConcurrency.toFloat(),
+                    valueRange = 1F..16F,
+                    steps = 14,
+                    desc = stringResource(id = R.string.args_current_sync_concurrency, boundedSyncConcurrency),
+                ) {
+                    scope.launch {
+                        context.saveSyncConcurrency(it.roundToInt())
+                    }
+                }
+            }
+
+            Title(title = stringResource(id = R.string.advanced)) {
                 val items = stringArrayResource(id = R.array.kill_app_options)
                 val dialogItems by remember(items) {
                     mutableStateOf(items.mapIndexed { index, s ->
@@ -122,12 +195,6 @@ fun PageBackupSettings() {
                     defValue = true,
                     title = stringResource(id = R.string.backup_configs),
                     checkedText = stringResource(id = R.string.backup_configs_desc),
-                )
-                Switchable(
-                    key = KeyCompressionTest,
-                    defValue = true,
-                    title = stringResource(id = R.string.compression_test),
-                    checkedText = stringResource(id = R.string.compression_test_desc),
                 )
                 /**
                  * Switchable(

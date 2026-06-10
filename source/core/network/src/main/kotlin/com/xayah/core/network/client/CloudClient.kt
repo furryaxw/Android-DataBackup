@@ -12,12 +12,19 @@ import com.xayah.core.rootservice.parcelables.PathParcelable
 import com.xayah.libpickyou.parcelables.DirChildrenParcelable
 
 interface CloudClient {
+    val entityName: String
+        get() = ""
+
     fun connect()
     fun disconnect()
     fun mkdir(dst: String)
     fun mkdirRecursively(dst: String)
     fun renameTo(src: String, dst: String)
     fun upload(src: String, dst: String, onUploading: (read: Long, total: Long) -> Unit)
+    fun uploadResume(src: String, dst: String, resumeOffset: Long, onUploading: (read: Long, total: Long) -> Unit) {
+        if (resumeOffset == 0L) upload(src, dst, onUploading)
+        else throw UnsupportedOperationException("Resume upload not supported for this protocol.")
+    }
     fun download(src: String, dst: String, onDownloading: (written: Long, total: Long) -> Unit)
     fun deleteFile(src: String)
     fun removeDirectory(src: String)

@@ -1,6 +1,7 @@
 package com.xayah.core.model.database
 
 import androidx.room.Entity
+import androidx.room.ColumnInfo
 import androidx.room.PrimaryKey
 import com.xayah.core.model.CloudType
 import com.xayah.core.model.SFTPAuthMode
@@ -39,4 +40,8 @@ data class CloudEntity(
     val remote: String,
     val extra: String,
     val activated: Boolean,
+    @ColumnInfo(defaultValue = "") val repositoryCachePath: String = "",
+    @ColumnInfo(defaultValue = "0") val repositoryCacheFiles: Int = 0,
+    @ColumnInfo(defaultValue = "0") val repositoryCacheBytes: Long = 0,
+    @ColumnInfo(defaultValue = "0") val repositoryCacheUpdatedAt: Long = 0,
 )

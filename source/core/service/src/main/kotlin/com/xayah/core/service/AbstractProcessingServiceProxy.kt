@@ -19,6 +19,10 @@ abstract class AbstractProcessingServiceProxy {
     abstract val context: Context
     abstract val intent: Intent
 
+    fun putExtra(name: String, value: String) {
+        intent.putExtra(name, value)
+    }
+
     private suspend fun bindService(): AbstractProcessingService = suspendCoroutine { continuation ->
         if (mService == null) {
             mConnection = object : ServiceConnection {

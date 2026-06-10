@@ -6,6 +6,14 @@ android {
     namespace = "com.xayah.libnative"
     ndkVersion = "25.2.9519653"
 
+    defaultConfig {
+        externalNativeBuild {
+            cmake {
+                arguments.addAll(listOf("-DANDROID_PLATFORM=28"))
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

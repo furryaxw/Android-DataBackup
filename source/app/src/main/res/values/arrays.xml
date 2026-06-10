@@ -31,4 +31,18 @@
         <item>@string/option_i</item>
         <item>@string/option_ii</item>
     </string-array>
+    <string-array name="backup_engine_options">
+        <item>@string/backup_engine_archive</item>
+        <item>@string/backup_engine_repository</item>
+    </string-array>
+    <string-array name="cloud_sync_strategy_options">
+        <item>@string/cloud_sync_never</item>
+        <item>@string/cloud_sync_manual</item>
+        <item>@string/cloud_sync_after_backup</item>
+    </string-array>
+    <string-array name="backup_cache_strategy_options">
+        <item>@string/backup_cache_keep</item>
+        <item>@string/backup_cache_delete_after_sync</item>
+        <item>@string/backup_cache_delete_when_low_space</item>
+    </string-array>
 </resources>

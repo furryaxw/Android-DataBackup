@@ -2,6 +2,7 @@ package com.xayah.core.service.medium.backup
 
 import android.annotation.SuppressLint
 import com.xayah.core.common.util.toLineString
+import com.xayah.core.data.repository.BackupEngineRepository
 import com.xayah.core.datastore.readBackupConfigs
 import com.xayah.core.datastore.readBackupItself
 import com.xayah.core.datastore.readResetBackupList
@@ -19,10 +20,8 @@ import com.xayah.core.model.database.TaskDetailMediaEntity
 import com.xayah.core.model.util.set
 import com.xayah.core.service.R
 import com.xayah.core.service.medium.AbstractMediumService
-import com.xayah.core.service.util.MediumBackupUtil
 import com.xayah.core.util.DateUtil
 import com.xayah.core.util.NotificationUtil
-import com.xayah.core.util.PathUtil
 import kotlinx.coroutines.flow.first
 
 internal abstract class AbstractBackupService : AbstractMediumService() {
@@ -81,20 +80,22 @@ internal abstract class AbstractBackupService : AbstractMediumService() {
     }
 
     protected open suspend fun onTargetDirsCreated() {}
-    protected open suspend fun onFileDirCreated(archivesRelativeDir: String): Boolean = true
-    abstract suspend fun backup(m: MediaEntity, r: MediaEntity?, t: TaskDetailMediaEntity, dstDir: String)
-    protected open suspend fun onConfigSaved(path: String, archivesRelativeDir: String) {}
     protected open suspend fun onItselfSaved(path: String, entity: ProcessingInfoEntity) {}
     protected open suspend fun onConfigsSaved(path: String, entity: ProcessingInfoEntity) {}
     protected open suspend fun clear() {}
 
-    protected abstract val mMediumBackupUtil: MediumBackupUtil
+    protected abstract val mBackupEngineRepo: BackupEngineRepository
+
+    private suspend fun TaskDetailMediaEntity.markUnfinishedAsError(message: String) {
+        if (mediaInfo.state != OperationState.DONE && mediaInfo.state != OperationState.SKIP) {
+            update(progress = 1f, state = OperationState.ERROR, log = message)
+        }
+    }
 
     override suspend fun onPreprocessing(entity: ProcessingInfoEntity) {
         when (entity.infoType) {
             ProcessingInfoType.NECESSARY_PREPARATIONS -> {
-                log { "Trying to create: $mFilesDir." }
-                mRootService.mkdirs(mFilesDir)
+                log { "Repository backup uses per-item repository directories." }
                 val isSuccess = runCatchingOnService { onTargetDirsCreated() }
                 entity.update(progress = 1f, state = if (isSuccess) OperationState.DONE else OperationState.ERROR)
             }
@@ -109,48 +110,67 @@ internal abstract class AbstractBackupService : AbstractMediumService() {
         log { "Task count: ${mMediaEntities.size}." }
 
         mMediaEntities.forEachIndexed { index, media ->
-            executeAtLeast {
-                NotificationUtil.notify(
-                    mContext,
-                    mNotificationBuilder,
-                    mContext.getString(R.string.backing_up),
-                    media.mediaEntity.name,
-                    mMediaEntities.size,
-                    index
-                )
-                log { "Current media: ${media.mediaEntity}" }
+            var counted = false
+            runCatching {
+                executeAtLeast {
+                    NotificationUtil.notify(
+                        mContext,
+                        mNotificationBuilder,
+                        mContext.getString(R.string.backing_up),
+                        media.mediaEntity.name,
+                        mMediaEntities.size,
+                        index
+                    )
+                    log { "Current media: ${media.mediaEntity}" }
 
-                media.update(state = OperationState.PROCESSING)
-                val m = media.mediaEntity
-                val dstDir = "${mFilesDir}/${m.archivesRelativeDir}"
-                var restoreEntity = mMediaDao.query(OpType.RESTORE, m.preserveId, m.name, m.indexInfo.compressionType, mTaskEntity.cloud, mTaskEntity.backupDir)
-                mRootService.mkdirs(dstDir)
-                if (onFileDirCreated(archivesRelativeDir = m.archivesRelativeDir)) {
-                    backup(m = m, r = restoreEntity, t = media, dstDir = dstDir)
+                    media.update(state = OperationState.PROCESSING)
+                    val m = media.mediaEntity
+                    var restoreEntity = mMediaDao.query(OpType.RESTORE, m.preserveId, m.name, m.indexInfo.compressionType, mTaskEntity.cloud, mTaskEntity.backupDir)
+                    val restoreSnapshotInfo = (restoreEntity?.snapshotInfo ?: m.snapshotInfo).copy()
+                    val repositoryEngineAvailable = mBackupEngineRepo.shouldUseRepositoryEngine()
+                    restoreSnapshotInfo.repositorySource = true
+                    if (repositoryEngineAvailable) {
+                            val result = mBackupEngineRepo.snapshotMedia(m, listOf(m.path))
+                            if (result is com.xayah.core.data.repository.RepositorySnapshotResult.Success) {
+                                restoreSnapshotInfo.mediaSnapshotId = result.snapshotId
+                                media.update(progress = 1f, state = OperationState.DONE)
+                            } else {
+                                media.update(progress = 1f, state = OperationState.ERROR, log = result.toString())
+                                log { "Repository snapshot failed for ${m.name}" }
+                            }
+                    } else {
+                        media.markUnfinishedAsError("Repository engine is unavailable.")
+                    }
 
                     if (media.isSuccess) {
-                        // Save config
-                        m.extraInfo.lastBackupTime = DateUtil.getTimestamp()
-                        val id = restoreEntity?.id ?: 0
-                        restoreEntity = m.copy(
-                            id = id,
-                            indexInfo = m.indexInfo.copy(opType = OpType.RESTORE, cloud = mTaskEntity.cloud, backupDir = mTaskEntity.backupDir),
-                            extraInfo = m.extraInfo.copy(existed = true, activated = false)
-                        )
-                        val configDst = PathUtil.getMediaRestoreConfigDst(dstDir = dstDir)
-                        mRootService.writeJson(data = restoreEntity, dst = configDst)
-                        onConfigSaved(path = configDst, archivesRelativeDir = m.archivesRelativeDir)
-                        mMediaDao.upsert(restoreEntity)
-                        mMediaDao.upsert(m)
-                        media.update(mediaEntity = m)
-                        mTaskEntity.update(successCount = mTaskEntity.successCount + 1)
-                    } else {
-                        mTaskEntity.update(failureCount = mTaskEntity.failureCount + 1)
-                    }
-                } else {
-                    media.update(state = OperationState.ERROR)
+                            // Save config
+                            m.extraInfo.lastBackupTime = DateUtil.getTimestamp()
+                            val id = restoreEntity?.id ?: 0
+                            restoreEntity = m.copy(
+                                id = id,
+                                indexInfo = m.indexInfo.copy(opType = OpType.RESTORE, cloud = mTaskEntity.cloud, backupDir = mTaskEntity.backupDir),
+                                extraInfo = m.extraInfo.copy(existed = true, activated = false),
+                                snapshotInfo = restoreSnapshotInfo,
+                            )
+                            mMediaDao.upsert(restoreEntity)
+                            mMediaDao.upsert(m)
+                            media.update(mediaEntity = m)
+                            mTaskEntity.update(successCount = mTaskEntity.successCount + 1)
+                            counted = true
+                        } else {
+                            mTaskEntity.update(failureCount = mTaskEntity.failureCount + 1)
+                            counted = true
+                        }
+                    media.update(state = if (media.isSuccess) OperationState.DONE else OperationState.ERROR)
                 }
-                media.update(state = if (media.isSuccess) OperationState.DONE else OperationState.ERROR)
+            }.onFailure { throwable ->
+                val message = throwable.stackTraceToString()
+                log { "Failed to back up ${media.mediaEntity.name}: $message" }
+                media.markUnfinishedAsError(message)
+                media.update(state = OperationState.ERROR)
+                if (counted.not()) {
+                    mTaskEntity.update(failureCount = mTaskEntity.failureCount + 1)
+                }
             }
             mTaskEntity.update(processingIndex = mTaskEntity.processingIndex + 1)
         }

@@ -12,7 +12,9 @@
     <item name="backup_files" type="string" />
     <item name="backup_messages" type="string" />
     <item name="cloud" type="string" />
+    <item name="sync" type="string" />
     <item name="restore" type="string" />
+    <item name="restore_from_legacy" type="string" />
     <item name="args_used_by_backups" type="string" />
     <item name="args_finished_at" type="string" />
     <item name="update_available" type="string" />

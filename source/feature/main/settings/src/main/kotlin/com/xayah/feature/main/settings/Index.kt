@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
@@ -36,6 +38,7 @@ import com.xayah.core.util.LanguageUtil
 import com.xayah.core.util.getActivity
 import com.xayah.core.util.navigateSingle
 import com.xayah.core.util.readMappedLanguage
+import com.xayah.core.data.repository.RepositoryRuntimeOperation
 import com.xayah.feature.setup.MainActivity as SetupActivity
 
 @ExperimentalLayoutApi
@@ -47,10 +50,12 @@ fun PageSettings() {
     val navController = LocalNavController.current!!
     val viewModel = hiltViewModel<IndexViewModel>()
     val directoryState by viewModel.directoryState.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
     SettingsScaffold(
         scrollBehavior = scrollBehavior,
+        snackbarHostState = viewModel.snackbarHostState,
         title = stringResource(id = R.string.settings),
         actions = {}
     ) {
@@ -100,6 +105,15 @@ fun PageSettings() {
                 }
             }
             Title(title = stringResource(id = R.string.manage_backups)) {
+                val progress = if (uiState.totalItems == 0) {
+                    0f
+                } else {
+                    uiState.processedItems.toFloat() / uiState.totalItems
+                }
+                val checkRunning = uiState.isProcessing && uiState.operation == RepositoryRuntimeOperation.CHECK
+                val clearRunning = uiState.isProcessing && uiState.operation == RepositoryRuntimeOperation.CLEAR
+                val progressText = "${uiState.processedItems}/${uiState.totalItems}"
+
                 Clickable(
                     icon = Icons.Outlined.Block,
                     title = stringResource(id = R.string.blacklist),
@@ -108,11 +122,44 @@ fun PageSettings() {
                     navController.navigateSingle(MainRoutes.BlackList.route)
                 }
                 Clickable(
+                    icon = Icons.Outlined.Cloud,
+                    title = stringResource(id = R.string.cloud_account_management),
+                    value = stringResource(id = R.string.cloud),
+                ) {
+                    navController.navigateSingle(MainRoutes.Cloud.route)
+                }
+                Clickable(
                     icon = ImageVector.vectorResource(id = R.drawable.ic_rounded_folder_open),
                     title = stringResource(id = R.string.backup_dir),
                     value = if (directoryState == null) null else stringResource(id = directoryState!!.titleResId),
                 ) {
                     navController.navigateSingle(MainRoutes.Directory.route)
+                }
+                Clickable(
+                    enabled = uiState.isProcessing.not(),
+                    leadingIcon = null as ImageVector?,
+                    title = stringResource(id = R.string.check_repository),
+                    value = if (checkRunning) "$progressText ${uiState.currentPath}".trim() else stringResource(id = R.string.check_repository_desc),
+                    content = {
+                        if (checkRunning) {
+                            LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) })
+                        }
+                    }
+                ) {
+                    viewModel.emitIntentOnIO(IndexUiIntent.CheckRepositories)
+                }
+                Clickable(
+                    enabled = uiState.isProcessing.not(),
+                    leadingIcon = null as ImageVector?,
+                    title = stringResource(id = R.string.clear_repository),
+                    value = if (clearRunning) "$progressText ${uiState.currentPath}".trim() else stringResource(id = R.string.clear_repository_desc),
+                    content = {
+                        if (clearRunning) {
+                            LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) })
+                        }
+                    }
+                ) {
+                    viewModel.emitIntentOnIO(IndexUiIntent.ClearRepositories)
                 }
             }
             Title(title = stringResource(id = R.string.advanced)) {

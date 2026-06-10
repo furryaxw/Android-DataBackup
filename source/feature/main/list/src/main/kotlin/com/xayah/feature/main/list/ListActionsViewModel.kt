@@ -6,12 +6,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xayah.core.data.repository.AppsRepo
 import com.xayah.core.data.repository.FilesRepo
+import com.xayah.core.data.repository.LegacyBackupRepository
 import com.xayah.core.data.repository.ListData
 import com.xayah.core.data.repository.ListDataRepo
+import com.xayah.core.data.repository.RepositoryRestoreCatalogRepository
 import com.xayah.core.hiddenapi.castTo
 import com.xayah.core.model.App
 import com.xayah.core.model.File
 import com.xayah.core.model.OpType
+import com.xayah.core.model.RestoreSource
 import com.xayah.core.model.Target
 import com.xayah.core.model.util.of
 import com.xayah.core.ui.route.MainRoutes
@@ -35,11 +38,13 @@ class ListActionsViewModel @Inject constructor(
     private val listDataRepo: ListDataRepo,
     private val appsRepo: AppsRepo,
     private val filesRepo: FilesRepo,
+    private val repositoryRestoreCatalogRepo: RepositoryRestoreCatalogRepository,
+    private val legacyBackupRepository: LegacyBackupRepository,
 ) : ViewModel() {
     private val target: Target = Target.valueOf(savedStateHandle.get<String>(MainRoutes.ARG_TARGET)!!.decodeURL().trim())
     private val opType: OpType = OpType.of(savedStateHandle.get<String>(MainRoutes.ARG_OP_TYPE)?.decodeURL()?.trim())
     private val cloudName: String = savedStateHandle.get<String>(MainRoutes.ARG_ACCOUNT_NAME)?.decodeURL()?.trim() ?: ""
-    private val backupDir: String = savedStateHandle.get<String>(MainRoutes.ARG_ACCOUNT_REMOTE)?.decodeURL()?.trim() ?: ""
+    private val restoreSource: RestoreSource = RestoreSource.of(savedStateHandle.get<String>(MainRoutes.ARG_RESTORE_SOURCE)?.decodeURL()?.trim())
 
     val uiState: StateFlow<ListActionsUiState> = when (target) {
         Target.Apps -> combine(
@@ -83,7 +88,7 @@ class ListActionsViewModel @Inject constructor(
                         }
 
                         OpType.RESTORE -> {
-                            WorkManagerInitializer.loadAppBackups(context, cloudName, backupDir)
+                            reloadRestoreCatalog()
                         }
                     }
                 }
@@ -95,12 +100,28 @@ class ListActionsViewModel @Inject constructor(
                         }
 
                         OpType.RESTORE -> {
-                            WorkManagerInitializer.loadFileBackups(context, cloudName, backupDir)
+                            reloadRestoreCatalog()
                         }
                     }
                 }
 
                 else -> {}
+            }
+        }
+    }
+
+    private suspend fun reloadRestoreCatalog() {
+        when (restoreSource) {
+            RestoreSource.REPOSITORY -> {
+                if (cloudName.isEmpty()) {
+                    repositoryRestoreCatalogRepo.reloadLocal {}
+                } else {
+                    repositoryRestoreCatalogRepo.reloadCloud(cloudName) {}
+                }
+            }
+
+            RestoreSource.LEGACY -> {
+                legacyBackupRepository.reloadLocal {}
             }
         }
     }

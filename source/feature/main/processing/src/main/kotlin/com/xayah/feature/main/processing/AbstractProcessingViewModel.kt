@@ -1,6 +1,7 @@
 package com.xayah.feature.main.processing
 
 import android.content.Context
+import androidx.navigation.NavHostController
 import android.view.SurfaceControlHidden
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.xayah.core.data.repository.TaskRepository
@@ -12,6 +13,7 @@ import com.xayah.core.model.database.CloudEntity
 import com.xayah.core.model.database.TaskEntity
 import com.xayah.core.rootservice.service.RemoteRootService
 import com.xayah.core.service.AbstractProcessingServiceProxy
+import com.xayah.core.ui.component.DialogState
 import com.xayah.core.ui.model.ProcessingCardItem
 import com.xayah.core.ui.model.ProcessingDataCardItem
 import com.xayah.core.ui.util.addInfo
@@ -58,6 +60,32 @@ abstract class AbstractProcessingViewModel(
     )
 ) {
     open suspend fun onOtherEvent(state: IndexUiState, intent: ProcessingUiIntent) {}
+    open suspend fun onProcessingDone(dialogState: DialogState, navController: NavHostController) {}
+    open suspend fun beforeInitialize() {}
+    open suspend fun afterInitialize(taskId: Long) {}
+    open val supportsPostBackupSync: Boolean = false
+    open suspend fun onPostBackupSyncClick(navController: NavHostController) {}
+
+    private suspend fun processWithCleanup(service: AbstractProcessingServiceProxy): Boolean {
+        var isSuccess = true
+        runCatching {
+            service.preprocessing()
+            service.processing()
+        }.onFailure {
+            isSuccess = false
+            emitEffectOnIO(IndexUiEffect.ShowSnackbar(message = it.localizedMessage ?: it.stackTraceToString()))
+        }
+
+        runCatching {
+            service.postProcessing()
+        }.onFailure {
+            isSuccess = false
+            emitEffectOnIO(IndexUiEffect.ShowSnackbar(message = it.localizedMessage ?: it.stackTraceToString()))
+        }
+
+        service.destroyService()
+        return isSuccess
+    }
 
     init {
         mRootService.onFailure = {
@@ -70,33 +98,22 @@ abstract class AbstractProcessingViewModel(
     override suspend fun onEvent(state: IndexUiState, intent: ProcessingUiIntent) {
         when (intent) {
             is ProcessingUiIntent.Initialize -> {
-                _taskId.value = if (uiState.value.storageType == StorageMode.Cloud) mCloudService.initialize() else mLocalService.initialize()
+                beforeInitialize()
+                val taskId = if (uiState.value.storageType == StorageMode.Cloud) mCloudService.initialize() else mLocalService.initialize()
+                _taskId.value = taskId
+                afterInitialize(taskId)
             }
 
             is ProcessingUiIntent.Process -> {
                 emitState(state.copy(state = OperationState.PROCESSING))
-                if (state.storageType == StorageMode.Cloud) {
-                    // Cloud
-                    mCloudService.preprocessing()
-                    mCloudService.processing()
-                    mCloudService.postProcessing()
-                    mCloudService.destroyService()
-                } else {
-                    // Local
-                    mLocalService.preprocessing()
-                    mLocalService.processing()
-                    mLocalService.postProcessing()
-                    mLocalService.destroyService()
-                }
-                emitState(state.copy(state = OperationState.DONE))
+                val isSuccess = processWithCleanup(if (state.storageType == StorageMode.Cloud) mCloudService else mLocalService)
+                emitState(state.copy(state = if (isSuccess) OperationState.DONE else OperationState.ERROR))
             }
 
             is ProcessingUiIntent.DestroyService -> {
                 if (state.storageType == StorageMode.Cloud) {
-                    // Cloud
                     mCloudService.destroyService(true)
                 } else {
-                    // Local
                     mLocalService.destroyService(true)
                 }
             }

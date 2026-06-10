@@ -22,6 +22,7 @@ import com.xayah.feature.main.cloud.add.PageFTPSetup
 import com.xayah.feature.main.cloud.add.PageSFTPSetup
 import com.xayah.feature.main.cloud.add.PageSMBSetup
 import com.xayah.feature.main.cloud.add.PageWebDAVSetup
+import com.xayah.feature.main.cloud.sync.PageSync
 import com.xayah.feature.main.configurations.PageConfigurations
 import com.xayah.feature.main.dashboard.PageDashboard
 import com.xayah.feature.main.details.DetailsRoute
@@ -34,7 +35,7 @@ import com.xayah.feature.main.processing.medium.restore.MediumRestoreProcessingG
 import com.xayah.feature.main.processing.packages.backup.PackagesBackupProcessingGraph
 import com.xayah.feature.main.processing.packages.restore.PackagesRestoreProcessingGraph
 import com.xayah.feature.main.restore.PageRestore
-import com.xayah.feature.main.restore.reload.PageReload
+import com.xayah.feature.main.restore.legacy.PageLegacyBackups
 import com.xayah.feature.main.settings.PageSettings
 import com.xayah.feature.main.settings.about.PageAboutSettings
 import com.xayah.feature.main.settings.about.PageTranslatorsSettings
@@ -61,6 +62,13 @@ class MainActivity : AppCompatActivity() {
             runCatching {
                 BaseUtil.initializeEnvironment(context = this@MainActivity)
             }
+            // Hash-based binary update: re-extract if APK was reinstalled
+            val currentInstallTime = packageManager.getPackageInfo(packageName, 0).lastUpdateTime
+            val storedInstallTime = getSharedPreferences("databackup_binary", MODE_PRIVATE)
+                .getLong("install_time", 0L)
+            if (currentInstallTime != storedInstallTime) {
+                runCatching { BaseUtil.releaseBase(context = this@MainActivity) }
+            }
         }
 
         setContent {
@@ -79,6 +87,9 @@ class MainActivity : AppCompatActivity() {
                         }
                         composable(MainRoutes.Cloud.route) {
                             PageCloud()
+                        }
+                        composable(MainRoutes.Sync.route) {
+                            PageSync()
                         }
                         composable(MainRoutes.CloudAddAccount.route) {
                             PageCloudAddAccount()
@@ -125,8 +136,8 @@ class MainActivity : AppCompatActivity() {
                         composable(MainRoutes.Restore.route) {
                             PageRestore()
                         }
-                        composable(MainRoutes.Reload.route) {
-                            PageReload()
+                        composable(MainRoutes.LegacyBackups.route) {
+                            PageLegacyBackups()
                         }
                         composable(MainRoutes.BackupSettings.route) {
                             PageBackupSettings()

@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -98,6 +99,9 @@ fun PageProcessing(
     val dataItems by viewModel.dataItems.collectAsStateWithLifecycle()
     val navController = LocalNavController.current!!
     val dialogState = LocalSlotScope.current!!.dialogSlot
+    var completionHandled by rememberSaveable(task?.id) { mutableStateOf(false) }
+    val isFinished = uiState.state == OperationState.DONE || uiState.state == OperationState.ERROR
+    val hasFailures = (task?.failureCount ?: 0) > 0
     val progress: Float by remember(task?.processingIndex, dataItems.size) {
         mutableFloatStateOf(
             if (task != null)
@@ -141,12 +145,19 @@ fun PageProcessing(
         }
     }
 
+    LaunchedEffect(uiState.state, task?.id) {
+        if (isFinished && completionHandled.not()) {
+            completionHandled = true
+            viewModel.onProcessingDone(dialogState, navController)
+        }
+    }
+
     val onBack: () -> Unit = remember {
         {
             if (uiState.state == OperationState.PROCESSING) {
                 viewModel.launchOnIO {
                     if (dialogState.confirm(title = context.getString(R.string.prompt), text = context.getString(R.string.processing_exit_confirmation))) {
-                        BaseUtil.kill(context, "tar", "root")
+                        BaseUtil.kill(context, "tar", "zstd", "rustic", "root")
                         viewModel.emitIntent(ProcessingUiIntent.DestroyService)
                         withMainContext {
                             navController.popBackStack()
@@ -180,27 +191,39 @@ fun PageProcessing(
                     .paddingHorizontal(SizeTokens.Level24)
                     .paddingVertical(SizeTokens.Level8),
             ) {
-                AnimatedVisibility(uiState.state == OperationState.DONE) {
+                AnimatedVisibility(isFinished) {
                     Button(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = {
                             task?.apply {
-                                navController.popBackStack()
                                 navController.navigateSingle(MainRoutes.TaskDetails.getRoute(id))
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = ThemedColorSchemeKeyTokens.SecondaryContainer.value, contentColor = ThemedColorSchemeKeyTokens.OnSecondaryContainer.value)
                     ) {
-                        Text(text = stringResource(R.string.visit_details))
+                        Text(text = stringResource(if (hasFailures) R.string.retry_failed_items else R.string.visit_details))
                     }
                 }
 
-                Button(modifier = Modifier.fillMaxWidth(), enabled = uiState.state == OperationState.IDLE || uiState.state == OperationState.DONE, onClick = {
+                Button(modifier = Modifier.fillMaxWidth(), enabled = uiState.state == OperationState.IDLE || isFinished, onClick = {
                     if (uiState.state == OperationState.IDLE) viewModel.emitIntentOnIO(ProcessingUiIntent.Process)
                     else navController.popBackStack()
                 }) {
-                    AnimatedTextContainer(targetState = if (uiState.state == OperationState.DONE) stringResource(id = R.string.finish) else stringResource(id = R.string._continue)) { text ->
+                    AnimatedTextContainer(targetState = if (isFinished) stringResource(id = R.string.finish) else stringResource(id = R.string._continue)) { text ->
                         Text(text = text)
+                    }
+                }
+
+                AnimatedVisibility(isFinished && viewModel.supportsPostBackupSync) {
+                    FilledTonalButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            viewModel.launchOnIO {
+                                viewModel.onPostBackupSyncClick(navController)
+                            }
+                        }
+                    ) {
+                        Text(text = stringResource(id = R.string.sync_to_cloud))
                     }
                 }
             }
@@ -352,9 +375,9 @@ fun PageProcessing(
                                 items = item.items,
                                 processingIndex = item.processingIndex,
                                 onActionBarClick = {
-                                    if (uiState.state == OperationState.DONE) {
-                                        expanded = expanded.not()
-                                    }
+                                if (isFinished) {
+                                    expanded = expanded.not()
+                                }
                                 }
                             )
                         }

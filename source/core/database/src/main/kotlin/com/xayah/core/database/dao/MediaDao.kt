@@ -67,11 +67,27 @@ interface MediaDao {
     )
     suspend fun query(opType: OpType, preserveId: Long, name: String, ct: CompressionType, cloud: String, backupDir: String): MediaEntity?
 
+    @Query(
+        "SELECT * FROM MediaEntity WHERE" +
+                " indexInfo_opType = :opType AND indexInfo_preserveId = :preserveId AND indexInfo_name = :name AND indexInfo_compressionType = :ct" +
+                " AND indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir" +
+                " AND snapshotInfo_repositorySource = :repositorySource" +
+                " LIMIT 1"
+    )
+    suspend fun query(opType: OpType, preserveId: Long, name: String, ct: CompressionType, cloud: String, backupDir: String, repositorySource: Boolean): MediaEntity?
+
     @Query("SELECT * FROM MediaEntity WHERE extraInfo_activated = 1 AND indexInfo_opType = :opType")
     suspend fun queryActivated(opType: OpType): List<MediaEntity>
 
     @Query("SELECT * FROM MediaEntity WHERE extraInfo_activated = 1 AND indexInfo_opType = :opType AND indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir")
     suspend fun queryActivated(opType: OpType, cloud: String, backupDir: String): List<MediaEntity>
+
+    @Query(
+        "SELECT * FROM MediaEntity WHERE" +
+                " extraInfo_activated = 1 AND indexInfo_opType = :opType AND indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir" +
+                " AND snapshotInfo_repositorySource = :repositorySource"
+    )
+    suspend fun queryActivated(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean): List<MediaEntity>
 
     @Query(
         "SELECT * FROM MediaEntity WHERE" +
@@ -84,6 +100,13 @@ interface MediaDao {
                 " indexInfo_opType = :opType AND indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir"
     )
     fun queryFlow(opType: OpType, cloud: String, backupDir: String): Flow<List<MediaEntity>>
+
+    @Query(
+        "SELECT * FROM MediaEntity WHERE" +
+                " indexInfo_opType = :opType AND indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir" +
+                " AND snapshotInfo_repositorySource = :repositorySource"
+    )
+    fun queryFlow(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean): Flow<List<MediaEntity>>
 
     @Query("SELECT * FROM MediaEntity WHERE indexInfo_opType = :opType AND indexInfo_preserveId = :preserveId")
     fun queryFlow(opType: OpType, preserveId: Long): Flow<List<MediaEntity>>
@@ -140,6 +163,13 @@ interface MediaDao {
     fun queryFilesFlow(opType: OpType, cloud: String, backupDir: String): Flow<List<MediaEntity>>
 
     @Query(
+        "SELECT * FROM MediaEntity WHERE" +
+                " indexInfo_opType = :opType AND extraInfo_existed = 1 AND indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir" +
+                " AND snapshotInfo_repositorySource = :repositorySource"
+    )
+    fun queryFilesFlow(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean): Flow<List<MediaEntity>>
+
+    @Query(
         "SELECT COUNT(*) FROM MediaEntity WHERE" +
                 " indexInfo_opType = :opType AND extraInfo_existed = :existed AND extraInfo_blocked = :blocked"
     )
@@ -150,6 +180,22 @@ interface MediaDao {
                 " indexInfo_opType = :opType AND extraInfo_existed = :existed AND extraInfo_blocked = :blocked AND extraInfo_activated = 1"
     )
     fun countActivatedFilesFlow(opType: OpType, existed: Boolean, blocked: Boolean): Flow<Long>
+
+    @Query(
+        "SELECT COUNT(*) FROM MediaEntity WHERE" +
+                " indexInfo_opType = :opType AND extraInfo_existed = :existed AND extraInfo_blocked = :blocked AND" +
+                " indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir AND" +
+                " snapshotInfo_repositorySource = :repositorySource"
+    )
+    fun countFilesFlow(opType: OpType, existed: Boolean, blocked: Boolean, cloud: String, backupDir: String, repositorySource: Boolean): Flow<Long>
+
+    @Query(
+        "SELECT COUNT(*) FROM MediaEntity WHERE" +
+                " indexInfo_opType = :opType AND extraInfo_existed = :existed AND extraInfo_blocked = :blocked AND extraInfo_activated = 1 AND" +
+                " indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir AND" +
+                " snapshotInfo_repositorySource = :repositorySource"
+    )
+    fun countActivatedFilesFlow(opType: OpType, existed: Boolean, blocked: Boolean, cloud: String, backupDir: String, repositorySource: Boolean): Flow<Long>
 
     @Query("UPDATE MediaEntity SET extraInfo_activated = :activated WHERE id = :id")
     suspend fun activateById(id: Long, activated: Boolean)
@@ -165,6 +211,13 @@ interface MediaDao {
 
     @Query("SELECT * FROM MediaEntity WHERE id = :id")
     suspend fun queryById(id: Long): MediaEntity?
+
+    @Query(
+        "SELECT * FROM MediaEntity WHERE" +
+                " indexInfo_opType = :opType AND extraInfo_existed = 1 AND indexInfo_cloud = :cloud AND indexInfo_backupDir = :backupDir" +
+                " AND snapshotInfo_repositorySource = :repositorySource"
+    )
+    suspend fun query(opType: OpType, cloud: String, backupDir: String, repositorySource: Boolean): List<MediaEntity>
 
     @Query("DELETE FROM MediaEntity WHERE id in (:ids)")
     suspend fun deleteByIds(ids: List<Long>)

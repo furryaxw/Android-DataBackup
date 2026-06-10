@@ -12,11 +12,6 @@
             android:foregroundServiceType="dataSync" />
 
         <service
-            android:name=".packages.backup.BackupServiceCloudImpl"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-
-        <service
             android:name=".packages.restore.RestoreServiceLocalImpl"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
@@ -28,11 +23,6 @@
 
         <service
             android:name=".medium.backup.BackupServiceLocalImpl"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-
-        <service
-            android:name=".medium.backup.BackupServiceCloudImpl"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 

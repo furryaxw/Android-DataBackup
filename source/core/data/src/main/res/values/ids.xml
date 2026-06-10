@@ -21,4 +21,15 @@
     <item name="user" type="string"/>
     <item name="app_is_frozen" type="string" />
     <item name="no_activities_found" type="string" />
+    <item name="repository_syncing_from_cloud" type="string" />
+    <item name="repository_cloud_account_not_found" type="string" />
+    <item name="repository_catalog_empty" type="string" />
+    <item name="repository_catalog_item_reloaded" type="string" />
+    <item name="repository_engine_not_available" type="string" />
+    <item name="no_available_cloud_accounts" type="string" />
+    <item name="sync_paused" type="string" />
+    <item name="sync_cancelled" type="string" />
+    <item name="legacy_importing_package_type" type="string" />
+    <item name="legacy_importing_file" type="string" />
+    <item name="legacy_extract_failed" type="string" />
 </resources>

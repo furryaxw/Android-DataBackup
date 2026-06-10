@@ -1,6 +1,8 @@
 package com.xayah.core.ui.route
 
 import com.xayah.core.model.OpType
+import com.xayah.core.model.RESTORE_SOURCE_ARG
+import com.xayah.core.model.RestoreSource as RestoreSourceMode
 import com.xayah.core.model.Target
 import com.xayah.core.util.encodedURLWithSpace
 
@@ -15,10 +17,12 @@ sealed class MainRoutes(val route: String) {
         const val ARG_TARGET = "target"
         const val ARG_OP_TYPE = "opType"
         const val ARG_ID = "id"
+        const val ARG_RESTORE_SOURCE = RESTORE_SOURCE_ARG
     }
 
     data object Dashboard : MainRoutes(route = "main_dashboard")
     data object Cloud : MainRoutes(route = "main_cloud")
+    data object Sync : MainRoutes(route = "main_sync")
     data object CloudAddAccount : MainRoutes(route = "main_cloud_add_account")
     data object FTPSetup : MainRoutes(route = "main_ftp_setup/{$ARG_ACCOUNT_NAME}") {
         fun getRoute(name: String) = "main_ftp_setup/$name"
@@ -37,9 +41,7 @@ sealed class MainRoutes(val route: String) {
     }
     data object Settings : MainRoutes(route = "main_settings")
     data object Restore : MainRoutes(route = "main_restore")
-    data object Reload : MainRoutes(route = "main_reload/{$ARG_ACCOUNT_NAME}/{$ARG_ACCOUNT_REMOTE}") {
-        fun getRoute(name: String, remote: String) = "main_reload/${name}/${remote}"
-    }
+    data object LegacyBackups : MainRoutes(route = "main_legacy_backups")
     data object BackupSettings : MainRoutes(route = "main_backup_settings")
     data object RestoreSettings : MainRoutes(route = "main_restore_settings")
     data object LanguageSettings : MainRoutes(route = "main_language_settings")
@@ -48,9 +50,14 @@ sealed class MainRoutes(val route: String) {
     data object About : MainRoutes(route = "main_about")
     data object Translators : MainRoutes(route = "main_translators")
 
-    data object List : MainRoutes(route = "main_list/{$ARG_TARGET}/{$ARG_OP_TYPE}/{$ARG_ACCOUNT_NAME}/{$ARG_ACCOUNT_REMOTE}") {
-        fun getRoute(target: Target, opType: OpType, cloudName: String = encodedURLWithSpace, backupDir: String = encodedURLWithSpace) =
-            "main_list/${target}/${opType}/${cloudName}/${backupDir}"
+    data object List : MainRoutes(route = "main_list/{$ARG_TARGET}/{$ARG_OP_TYPE}/{$ARG_ACCOUNT_NAME}/{$ARG_ACCOUNT_REMOTE}/{$ARG_RESTORE_SOURCE}") {
+        fun getRoute(
+            target: Target,
+            opType: OpType,
+            cloudName: String = encodedURLWithSpace,
+            backupDir: String = encodedURLWithSpace,
+            restoreSource: RestoreSourceMode = RestoreSourceMode.REPOSITORY,
+        ) = "main_list/${target}/${opType}/${cloudName}/${backupDir}/${restoreSource.name}"
     }
 
     data object Details : MainRoutes(route = "main_details/{$ARG_TARGET}/{$ARG_OP_TYPE}/{$ARG_ID}") {
@@ -70,8 +77,12 @@ sealed class MainRoutes(val route: String) {
 
     data object PackagesRestoreProcessing : MainRoutes(route = "main_packages_restore_processing")
     data object PackagesRestoreProcessingSetup : MainRoutes(route = "main_packages_restore_processing_setup")
-    data object PackagesRestoreProcessingGraph : MainRoutes(route = "main_packages_restore_processing_graph/{$ARG_ACCOUNT_NAME}/{$ARG_ACCOUNT_REMOTE}") {
-        fun getRoute(cloudName: String = encodedURLWithSpace, backupDir: String = encodedURLWithSpace) = "main_packages_restore_processing_graph/${cloudName}/${backupDir}"
+    data object PackagesRestoreProcessingGraph : MainRoutes(route = "main_packages_restore_processing_graph/{$ARG_ACCOUNT_NAME}/{$ARG_ACCOUNT_REMOTE}/{$ARG_RESTORE_SOURCE}") {
+        fun getRoute(
+            cloudName: String = encodedURLWithSpace,
+            backupDir: String = encodedURLWithSpace,
+            restoreSource: RestoreSourceMode = RestoreSourceMode.REPOSITORY,
+        ) = "main_packages_restore_processing_graph/${cloudName}/${backupDir}/${restoreSource.name}"
     }
 
     data object MediumBackupProcessing : MainRoutes(route = "main_medium_backup_processing")
@@ -80,7 +91,11 @@ sealed class MainRoutes(val route: String) {
 
     data object MediumRestoreProcessing : MainRoutes(route = "main_medium_restore_processing")
     data object MediumRestoreProcessingSetup : MainRoutes(route = "main_medium_restore_processing_setup")
-    data object MediumRestoreProcessingGraph : MainRoutes(route = "main_medium_restore_processing_graph/{$ARG_ACCOUNT_NAME}/{$ARG_ACCOUNT_REMOTE}") {
-        fun getRoute(cloudName: String = encodedURLWithSpace, backupDir: String = encodedURLWithSpace) = "main_medium_restore_processing_graph/${cloudName}/${backupDir}"
+    data object MediumRestoreProcessingGraph : MainRoutes(route = "main_medium_restore_processing_graph/{$ARG_ACCOUNT_NAME}/{$ARG_ACCOUNT_REMOTE}/{$ARG_RESTORE_SOURCE}") {
+        fun getRoute(
+            cloudName: String = encodedURLWithSpace,
+            backupDir: String = encodedURLWithSpace,
+            restoreSource: RestoreSourceMode = RestoreSourceMode.REPOSITORY,
+        ) = "main_medium_restore_processing_graph/${cloudName}/${backupDir}/${restoreSource.name}"
     }
 }

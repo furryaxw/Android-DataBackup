@@ -1,14 +1,15 @@
 package com.xayah.core.service.packages.backup
 
 import com.xayah.core.data.repository.PackageRepository
+import com.xayah.core.data.repository.BackupRetryRepository
+import com.xayah.core.data.repository.BackupEngineRepository
+import com.xayah.core.data.repository.CloudRepository
+import com.xayah.core.data.repository.RepositoryLayout
 import com.xayah.core.data.repository.TaskRepository
 import com.xayah.core.database.dao.PackageDao
 import com.xayah.core.database.dao.TaskDao
-import com.xayah.core.model.DataType
 import com.xayah.core.model.OpType
 import com.xayah.core.model.TaskType
-import com.xayah.core.model.database.PackageEntity
-import com.xayah.core.model.database.TaskDetailPackageEntity
 import com.xayah.core.model.database.TaskEntity
 import com.xayah.core.rootservice.service.RemoteRootService
 import com.xayah.core.service.util.CommonBackupUtil
@@ -49,16 +50,6 @@ internal class BackupServiceLocalImpl @Inject constructor() : AbstractBackupServ
         )
     }
 
-    override suspend fun backup(type: DataType, p: PackageEntity, r: PackageEntity?, t: TaskDetailPackageEntity, dstDir: String) {
-        if (type == DataType.PACKAGE_APK) {
-            mPackagesBackupUtil.backupApk(p = p, t = t, r = r, dstDir = dstDir)
-        } else {
-            mPackagesBackupUtil.backupData(p = p, t = t, r = r, dataType = type, dstDir = dstDir)
-        }
-        t.update(dataType = type, progress = 1f)
-        t.update(processingIndex = t.processingIndex + 1)
-    }
-
     @Inject
     override lateinit var mPackageDao: PackageDao
 
@@ -66,9 +57,27 @@ internal class BackupServiceLocalImpl @Inject constructor() : AbstractBackupServ
     override lateinit var mPackageRepo: PackageRepository
 
     @Inject
+    override lateinit var mBackupRetryRepo: BackupRetryRepository
+
+    @Inject
     override lateinit var mPackagesBackupUtil: PackagesBackupUtil
+
+    @Inject
+    override lateinit var mBackupEngineRepo: BackupEngineRepository
+
+    @Inject
+    lateinit var mCloudRepo: CloudRepository
 
     override val mRootDir by lazy { mContext.localBackupSaveDir() }
     override val mAppsDir by lazy { mPathUtil.getLocalBackupAppsDir() }
     override val mConfigsDir by lazy { mPathUtil.getLocalBackupConfigsDir() }
+
+    override suspend fun afterPostProcessing() {
+        super.afterPostProcessing()
+        runCatching {
+            mCloudRepo.refreshLocalRepositoryMeta(RepositoryLayout.fromRoot(mRootDir).repositoryRoot)
+        }.onFailure {
+            log { "Failed to refresh local repository meta after package backup: ${it.localizedMessage ?: it}" }
+        }
+    }
 }

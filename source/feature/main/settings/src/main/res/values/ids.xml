@@ -9,8 +9,6 @@
     <item name="follow_symlinks_desc" type="string" />
     <item name="monet" type="string" />
     <item name="monet_desc" type="string" />
-    <item name="compression_test" type="string" />
-    <item name="compression_test_desc" type="string" />
     <item name="backup" type="string" />
     <item name="restore" type="string" />
     <item name="version" type="string" />
@@ -24,6 +22,8 @@
     <item name="enter_the_setup_page_again" type="string" />
     <item name="manage_backups" type="string" />
     <item name="backup_dir" type="string" />
+    <item name="cloud_account_management" type="string" />
+    <item name="cloud" type="string" />
     <item name="appearance" type="string" />
     <item name="theme_auto" type="string" />
     <item name="theme_auto_desc" type="string" />
@@ -68,9 +68,33 @@
     <item name="restore_permissions_desc" type="string" />
     <item name="restore_ssaid" type="string" />
     <item name="restore_ssaid_desc" type="string" />
-    <item name="compression_level" type="string" />
-    <item name="compression_level_desc" type="string" />
-    <item name="args_current_level" type="string" />
+    <item name="cloud_sync_strategy" type="string" />
+    <item name="cloud_sync_strategy_desc" type="string" />
+    <item name="cloud_sync_never" type="string" />
+    <item name="cloud_sync_after_backup" type="string" />
+    <item name="cloud_sync_manual" type="string" />
+    <item name="default_sync_cloud" type="string" />
+    <item name="default_sync_cloud_desc" type="string" />
+    <item name="not_selected" type="string" />
+    <item name="backup_cache_strategy" type="string" />
+    <item name="backup_cache_strategy_desc" type="string" />
+    <item name="backup_cache_keep" type="string" />
+    <item name="backup_cache_delete_after_sync" type="string" />
+    <item name="backup_cache_delete_when_low_space" type="string" />
+    <item name="continue_pending_uploads" type="string" />
+    <item name="args_pending_uploads" type="string" />
+    <item name="cloud_upload_retries" type="string" />
+    <item name="args_current_retries" type="string" />
+    <item name="sync_concurrency" type="string" />
+    <item name="args_current_sync_concurrency" type="string" />
+    <item name="check_repository" type="string" />
+    <item name="check_repository_desc" type="string" />
+    <item name="clear_repository" type="string" />
+    <item name="clear_repository_desc" type="string" />
+    <item name="no_repositories_found" type="string" />
+    <item name="clear_repository_failed" type="string" />
+    <item name="processing" type="string" />
+    <item name="succeed" type="string" />
 
     <item name="ic_rounded_acute" type="drawable" />
     <item name="ic_rounded_history" type="drawable" />
@@ -78,4 +102,6 @@
     <item name="ic_rounded_emoticon" type="drawable" />
 
     <item name="kill_app_options" type="array" />
+    <item name="cloud_sync_strategy_options" type="array" />
+    <item name="backup_cache_strategy_options" type="array" />
 </resources>

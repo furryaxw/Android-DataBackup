@@ -2,6 +2,8 @@ package com.xayah.core.datastore
 
 import android.content.Context
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.xayah.core.model.BackupCacheStrategy
+import com.xayah.core.model.CloudSyncStrategy
 import com.xayah.core.model.CompressionType
 import com.xayah.core.model.KillAppOption
 import com.xayah.core.model.SelectionType
@@ -19,6 +21,9 @@ val KeyThemeType = stringPreferencesKey("theme_type")
 val KeyCustomSUFile = stringPreferencesKey("custom_su_file")
 val KeyKillAppOption = stringPreferencesKey("kill_app_option")
 val KeyLanguage = stringPreferencesKey("language")
+val KeyCloudSyncStrategy = stringPreferencesKey("cloud_sync_strategy")
+val KeyBackupCacheStrategy = stringPreferencesKey("backup_cache_strategy")
+val KeyDefaultSyncCloud = stringPreferencesKey("default_sync_cloud")
 
 
 // -----------------------------------------Read-----------------------------------------
@@ -30,6 +35,9 @@ fun Context.readSelectionType() = readStoreString(key = KeySelectionType, defVal
 fun Context.readThemeType() = readStoreString(key = KeyThemeType, defValue = "").map { ThemeType.of(it) }
 fun Context.readKillAppOption() = readStoreString(key = KeyKillAppOption, defValue = "").map { KillAppOption.of(it) }
 fun Context.readLanguage() = readStoreString(key = KeyLanguage, defValue = ConstantUtil.LANGUAGE_SYSTEM)
+fun Context.readCloudSyncStrategy() = readStoreString(key = KeyCloudSyncStrategy, defValue = "").map { CloudSyncStrategy.of(it) }
+fun Context.readBackupCacheStrategy() = readStoreString(key = KeyBackupCacheStrategy, defValue = "").map { BackupCacheStrategy.of(it) }
+fun Context.readDefaultSyncCloud() = readStoreString(key = KeyDefaultSyncCloud, defValue = "")
 
 /**
  * The final path for saving the backup.
@@ -50,3 +58,6 @@ suspend fun Context.saveBackupSavePath(value: String) = saveStoreString(key = Ke
 suspend fun Context.saveCustomSUFile(value: String) = saveStoreString(key = KeyCustomSUFile, value = value.trim())
 suspend fun Context.saveKillAppOption(value: KillAppOption) = saveStoreString(key = KeyKillAppOption, value = value.name.trim())
 suspend fun Context.saveLanguage(value: String) = saveStoreString(key = KeyLanguage, value = value.trim())
+suspend fun Context.saveCloudSyncStrategy(value: CloudSyncStrategy) = saveStoreString(key = KeyCloudSyncStrategy, value = value.name.trim())
+suspend fun Context.saveBackupCacheStrategy(value: BackupCacheStrategy) = saveStoreString(key = KeyBackupCacheStrategy, value = value.name.trim())
+suspend fun Context.saveDefaultSyncCloud(value: String) = saveStoreString(key = KeyDefaultSyncCloud, value = value.trim())

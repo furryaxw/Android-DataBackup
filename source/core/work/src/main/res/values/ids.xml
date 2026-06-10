@@ -4,4 +4,5 @@
     <item name="loading_backups" type="string" />
     <item name="updating_file_list" type="string" />
     <item name="wait_for_remaining_data_processing" type="string" />
+    <item name="retry_failed_apps" type="string" />
 </resources>

@@ -29,6 +29,8 @@ import java.io.OutputStream
 import javax.security.auth.login.LoginException
 
 class FTPClientImpl(private val entity: CloudEntity, private val extra: FTPExtra) : CloudClient {
+    override val entityName: String = entity.name
+
     private var client: FTPClient? = null
 
     private fun log(msg: () -> String): String = run {
@@ -42,7 +44,9 @@ class FTPClientImpl(private val entity: CloudEntity, private val extra: FTPExtra
     }
 
     override fun connect() {
-        client = FTPClient().apply {
+        val ftpClient = FTPClient()
+        client = ftpClient
+        ftpClient.apply {
             autodetectUTF8 = true
             connect(entity.host, extra.port)
             if (login(entity.user, entity.pass).not()) throw LoginException("Failed to login, user: ${entity.user}, pass: ${entity.pass}.")
@@ -53,10 +57,11 @@ class FTPClientImpl(private val entity: CloudEntity, private val extra: FTPExtra
     }
 
     override fun disconnect() {
-        withClient { client ->
-            if (client.isConnected) {
-                if (client.logout().not()) throw LoginException("Failed to logout.")
-                client.disconnect()
+        val ftpClient = client ?: return
+        runCatching {
+            if (ftpClient.isConnected) {
+                runCatching { ftpClient.logout() }
+                ftpClient.disconnect()
             }
         }
         client = null
@@ -85,19 +90,34 @@ class FTPClientImpl(private val entity: CloudEntity, private val extra: FTPExtra
         if (client.rename(src, dst).not()) throw IOException("Failed to rename file from $src to $dst.")
     }
 
-    override fun upload(src: String, dst: String, onUploading: (read: Long, total: Long) -> Unit) = withClient { client ->
+    override fun upload(src: String, dst: String, onUploading: (read: Long, total: Long) -> Unit) {
+        uploadResume(src, dst, 0L, onUploading)
+    }
+
+    override fun uploadResume(src: String, dst: String, resumeOffset: Long, onUploading: (read: Long, total: Long) -> Unit) = withClient { client ->
         val name = PathUtil.getFileName(src)
         val dstPath = "$dst/$name"
-        log { "upload: $src to $dstPath" }
+        log { "uploadResume: $src to $dstPath, offset: $resumeOffset" }
         val srcFile = File(src)
         val srcFileSize = srcFile.length()
-        val srcInputStream = FileInputStream(srcFile)
-        val countingStream = CountingInputStreamImpl(srcInputStream, srcFileSize) { read, total -> onUploading(read, total) }
-        client.storeFile(dstPath, countingStream)
-        srcInputStream.close()
-        countingStream.close()
-        if (countingStream.byteCount == 0L) throw IOException("Failed to write remote file: 0 byte.")
-        onUploading(countingStream.byteCount, countingStream.byteCount)
+        val bytesToSend = srcFileSize - resumeOffset
+        if (bytesToSend <= 0) {
+            onUploading(srcFileSize, srcFileSize)
+            return@withClient
+        }
+        FileInputStream(srcFile).use { srcInputStream ->
+            srcInputStream.skip(resumeOffset)
+            CountingInputStreamImpl(srcInputStream, bytesToSend) { read, _ ->
+                onUploading(resumeOffset + read, srcFileSize)
+            }.use { countingStream ->
+                if (resumeOffset == 0L) {
+                    client.storeFile(dstPath, countingStream)
+                } else {
+                    if (client.appendFile(dstPath, countingStream).not()) throw IOException("Failed to append file: $dstPath.")
+                }
+            }
+        }
+        onUploading(srcFileSize, srcFileSize)
     }
 
     override fun download(src: String, dst: String, onDownloading: (written: Long, total: Long) -> Unit) = withClient { client ->
@@ -105,15 +125,18 @@ class FTPClientImpl(private val entity: CloudEntity, private val extra: FTPExtra
         val dstPath = "$dst/$name"
         log { "download: $src to $dstPath" }
         val dstFile = File(dstPath)
+        var byteCount = 0L
         val srcInputStream: InputStream = client.retrieveFileStream(src)
-        val dstOutPutStream: OutputStream = dstFile.outputStream()
-        val countingStream = CountingOutputStreamImpl(dstOutPutStream, -1) { written, total -> onDownloading(written, total) }
-        srcInputStream.copyTo(countingStream)
+        dstFile.outputStream().use { dstOutPutStream ->
+            srcInputStream.use { input ->
+                CountingOutputStreamImpl(dstOutPutStream, -1) { written, total -> onDownloading(written, total) }.use { countingStream ->
+                    input.copyTo(countingStream)
+                    byteCount = countingStream.byteCount
+                }
+            }
+        }
         client.completePendingCommand()
-        srcInputStream.close()
-        dstOutPutStream.close()
-        countingStream.close()
-        onDownloading(countingStream.byteCount, countingStream.byteCount)
+        onDownloading(byteCount, byteCount)
     }
 
     override fun deleteFile(src: String) = withClient { client ->

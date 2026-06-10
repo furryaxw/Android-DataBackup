@@ -246,6 +246,11 @@ object BaseUtil {
         // Remove binary archive
         binArchive.deleteRecursively()
 
+        // Save install timestamp for hash-based update detection
+        val installTime = context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
+        context.getSharedPreferences("databackup_binary", Context.MODE_PRIVATE)
+            .edit().putLong("install_time", installTime).apply()
+
         return@withIOContext true
     }
 

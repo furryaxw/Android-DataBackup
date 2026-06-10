@@ -18,6 +18,7 @@ val KeyLoadSystemApps = booleanPreferencesKey("load_system_apps")
 val KeyBackupConfigs = booleanPreferencesKey("backup_configs")
 val KeyRestorePermissions = booleanPreferencesKey("restore_permissions")
 val KeyRestoreSsaid = booleanPreferencesKey("restore_ssaid")
+val KeyAutoSyncAfterBackup = booleanPreferencesKey("auto_sync_after_backup")
 
 // -----------------------------------------Read-----------------------------------------
 fun Context.readMonet() = readStoreBoolean(key = KeyMonet, defValue = true)
@@ -34,6 +35,7 @@ fun Context.readAutoScreenOff() = readStoreBoolean(key = KeyAutoScreenOff, defVa
 fun Context.readBackupConfigs() = readStoreBoolean(key = KeyBackupConfigs, defValue = true)
 fun Context.readRestorePermissions() = readStoreBoolean(key = KeyRestorePermissions, defValue = true)
 fun Context.readRestoreSsaid() = readStoreBoolean(key = KeyRestoreSsaid, defValue = true)
+fun Context.readAutoSyncAfterBackup() = readStoreBoolean(key = KeyAutoSyncAfterBackup, defValue = false)
 
 // -----------------------------------------Write-----------------------------------------
 suspend fun Context.saveMonet(value: Boolean) = saveStoreBoolean(key = KeyMonet, value = value)
@@ -50,3 +52,4 @@ suspend fun Context.saveAutoScreenOff(value: Boolean) = saveStoreBoolean(key = K
 suspend fun Context.saveBackupConfigs(value: Boolean) = saveStoreBoolean(key = KeyBackupConfigs, value = value)
 suspend fun Context.saveRestorePermissions(value: Boolean) = saveStoreBoolean(key = KeyRestorePermissions, value = value)
 suspend fun Context.saveRestoreSsaid(value: Boolean) = saveStoreBoolean(key = KeyRestoreSsaid, value = value)
+suspend fun Context.saveAutoSyncAfterBackup(value: Boolean) = saveStoreBoolean(key = KeyAutoSyncAfterBackup, value = value)
