@@ -18,7 +18,7 @@ ZLIB_VERSION=1.3.1                                               # https://githu
 XZ_VERSION=5.6.2                                                 # https://github.com/tukaani-project/xz/releases
 LZ4_VERSION=1.9.4                                                # https://github.com/lz4/lz4/releases
 ZSTD_VERSION=1.5.6                                               # https://github.com/facebook/zstd/releases
-BUSYBOX_VERSION=1_36_1                                           # https://www.busybox.net/downloads/?C=M;O=D
+BUSYBOX_VERSION=1.36.1                                           # https://www.busybox.net/downloads/?C=M;O=D
 SELINUX_COMMIT=81d604a9d5f34306d22121391d350e0027191cb5          # https://github.com/XayahSuSuSu/selinux/tree/81d604a9d5f34306d22121391d350e0027191cb5
 PCRE_BRANCH=android14-mainline-adbd-release                      # https://android.googlesource.com/platform/external/pcre
 ##################################################
@@ -233,7 +233,7 @@ build_external() {
 
 build_busybox() {
     git clone https://github.com/XayahSuSuSu/ndk-box-kitchen -b $NDK_VERSION && cd ndk-box-kitchen
-    wget https://git.busybox.net/busybox/snapshot/busybox-$BUSYBOX_VERSION.tar.bz2
+    wget https://busybox.net/downloads/busybox-$BUSYBOX_VERSION.tar.bz2
     tar xf busybox-$BUSYBOX_VERSION.tar.bz2
     mv busybox-$BUSYBOX_VERSION busybox
     git clone https://github.com/XayahSuSuSu/selinux jni/selinux
